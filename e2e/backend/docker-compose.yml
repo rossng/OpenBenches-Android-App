@@ -1,0 +1,59 @@
+# Local OpenBenches backend for end-to-end testing. Start it with ./up.sh, which fetches the
+# website source (with its Docker setup in dev/) into .openbenches-src first.
+name: openbenches-e2e
+
+services:
+  db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: openbenc_benches
+      MARIADB_USER: openbenches
+      MARIADB_PASSWORD: badpassword
+    volumes:
+      - ./.openbenches-src/database:/seed:ro
+      - ./.openbenches-src/dev/load-db.sh:/docker-entrypoint-initdb.d/00-load-db.sh:ro
+      - ./fixtures.sql:/docker-entrypoint-initdb.d/10-fixtures.sql:ro
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 120s
+
+  web:
+    build:
+      context: ./.openbenches-src/www
+      dockerfile: ../dev/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:80"
+    volumes:
+      - ./.openbenches-src/dev/env.local:/var/www/openbenches/.env.local:ro
+      - ./.openbenches-src/dev/symfony/framework.yaml:/var/www/openbenches/config/packages/framework.yaml:ro
+      - ./.openbenches-src/dev/symfony/twig.yaml:/var/www/openbenches/config/packages/twig.yaml:ro
+      - ./.openbenches-src/dev/symfony/doctrine.yaml:/var/www/openbenches/config/packages/doctrine.yaml:ro
+      - ./photos:/var/www/openbenches/public/photos
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost/api/bench/900001"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+
+  fakes:
+    image: caddy:2.10.2-alpine
+    ports:
+      - "8001:80"
+    volumes:
+      - ./fakes/Caddyfile:/etc/caddy/Caddyfile:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  db-data:

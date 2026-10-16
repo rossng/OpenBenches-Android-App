@@ -1,0 +1,8 @@
+.openbenches-src/
+# Demo photos from fetch-photos.sh; only the e2e fixture photo is committed.
+photos/*
+!photos/9/
+photos/9/*
+!photos/9/0/
+photos/9/0/*
+!photos/9/0/909e8e481c851f1dc14742d61f690243d8f701a7.jpg

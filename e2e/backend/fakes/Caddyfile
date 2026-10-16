@@ -1,0 +1,12 @@
+# Stand-ins for third-party APIs, so the local stack needs no external accounts.
+:80 {
+	# OpenCage reverse geocoding, as called by fetchAddressFromLatLng() in the app.
+	handle /geocode/v1/json {
+		header Content-Type application/json
+		respond `{"results":[{"formatted":"1 Fixture Way, Testville, E2E 0AA"}]}` 200
+	}
+	handle /health {
+		respond "ok" 200
+	}
+	respond "No fake for {method} {uri}" 404
+}
