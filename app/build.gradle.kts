@@ -21,8 +21,8 @@ android {
         applicationId = "org.openbenches"
         minSdk = 28
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.10"
+        versionCode = 5
+        versionName = "1.11-preview"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -40,6 +40,19 @@ android {
         buildConfigField("String", "SIGN_IN_MODE", "\"$signInMode\"")
     }
 
+    // Release signing, from the environment so no secrets live in the repo:
+    //   OB_KEYSTORE_PATH, OB_KEYSTORE_PASSWORD, OB_KEY_ALIAS (see RELEASING.md).
+    // Without them, release builds are left unsigned.
+    val keystorePath = System.getenv("OB_KEYSTORE_PATH")
+    val releaseSigning = if (keystorePath != null) {
+        signingConfigs.create("release") {
+            storeFile = file(keystorePath)
+            storePassword = System.getenv("OB_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("OB_KEY_ALIAS") ?: "openbenches-fork"
+            keyPassword = System.getenv("OB_KEYSTORE_PASSWORD")
+        }
+    } else null
+
     buildTypes {
         debug {
             // Sign in against the local fake Auth0 (e2e/backend) instead: -Pauth.fakeUrl=http://10.0.2.2:8002/
@@ -47,7 +60,12 @@ android {
             buildConfigField("String", "FAKE_AUTH_URL", "\"$fakeAuthUrl\"")
         }
         release {
-            isMinifyEnabled = false
+            signingConfig = releaseSigning
+            // Shrink code and resources: unshrunk, the APK is ~98 MB (mostly unused icons and libraries).
+            isMinifyEnabled = true
+            isShrinkResources = true
+            // Phones are all ARM; x86 is only for emulators and some Chromebooks (+23 MB of OCR libraries).
+            ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

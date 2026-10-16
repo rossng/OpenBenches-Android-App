@@ -13,6 +13,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Open Benches"
+rootProject.name = "OpenBenches"
 include(":app")
  

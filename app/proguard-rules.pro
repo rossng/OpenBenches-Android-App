@@ -19,3 +19,12 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+# --- OpenBenches ---
+# Gson reads and writes these by field name (API responses, drafts, the cached bench list).
+-keep class org.openbenches.data.** { *; }
+-keepattributes Signature, *Annotation*, InnerClasses, EnclosingMethod
+
+# Retrofit 2.9 with suspend functions under R8 full mode.
+-keep,allowobfuscation,allowshrinking interface retrofit2.Call
+-keep,allowobfuscation,allowshrinking class retrofit2.Response
+-keep,allowobfuscation,allowshrinking class kotlin.coroutines.Continuation
