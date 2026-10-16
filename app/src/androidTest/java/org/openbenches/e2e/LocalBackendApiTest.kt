@@ -11,7 +11,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.openbenches.data.fetchAddressFromLatLng
 import org.openbenches.data.fetchBenchDetails
 import org.openbenches.data.fetchBenches
 import org.openbenches.data.fetchBenchesBySearch
@@ -82,7 +81,7 @@ class LocalBackendApiTest {
     }
 
     @Test
-    fun reverseGeocode_usesFakeOpenCage() = runBlocking {
-        assertEquals(Fixtures.FAKE_ADDRESS, fetchAddressFromLatLng(Fixtures.LATITUDE, Fixtures.LONGITUDE))
+    fun benchDetails_includeTheStoredAddress() = runBlocking {
+        assertEquals(Fixtures.ADDRESS, fetchBenchDetails(Fixtures.BENCH_ID).features!!.single().properties!!.address)
     }
 }

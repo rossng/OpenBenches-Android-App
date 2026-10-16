@@ -12,7 +12,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.openbenches.data.Bench
 import org.openbenches.data.BenchDetailsFeature
-import org.openbenches.data.fetchAddressFromLatLng
 import org.openbenches.data.fetchBenchDetails
 import org.openbenches.data.fetchBenches
 import org.openbenches.data.fetchBenchesBySearch
@@ -41,7 +40,6 @@ class BrowseViewModel : ViewModel() {
     val selected: Bench? get() = selection.firstOrNull()
 
     val details = mutableStateMapOf<Int, DetailsState>()
-    val addresses = mutableStateMapOf<Int, String>()
 
     var query by mutableStateOf("")
         private set
@@ -109,12 +107,6 @@ class BrowseViewModel : ViewModel() {
                 } catch (e: Exception) {
                     DetailsState.Failed(e.message ?: "Couldn't load this bench")
                 }
-            }
-        }
-        if (bench.id !in addresses) {
-            viewModelScope.launch {
-                runCatching { fetchAddressFromLatLng(bench.lat, bench.lng) }
-                    .getOrNull()?.let { addresses[bench.id] = it }
             }
         }
     }

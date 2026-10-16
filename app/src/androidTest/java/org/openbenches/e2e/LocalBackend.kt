@@ -13,7 +13,7 @@ object Fixtures {
     const val INSCRIPTION_MARKER = "Zebra Kumquat"
     const val PHOTO_SHA1 = "909e8e481c851f1dc14742d61f690243d8f701a7"
     const val PHOTO_WIDTH = 490
-    const val FAKE_ADDRESS = "1 Fixture Way, Testville, E2E 0AA"
+    const val ADDRESS = "E2E Test Location"
 }
 
 /**

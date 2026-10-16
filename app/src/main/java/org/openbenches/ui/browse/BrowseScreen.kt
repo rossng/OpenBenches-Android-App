@@ -210,7 +210,6 @@ fun BrowseScreen(vm: BrowseViewModel = viewModel()) {
                         bench = bench,
                         stack = vm.selection,
                         details = details,
-                        address = vm.addresses[bench.id],
                         distance = userLocation?.let { formatDistance(distanceMeters(it.first, it.second, bench.lat, bench.lng)) },
                         actions = BenchSheetActions(
                             onClose = { vm.clearSelection() },

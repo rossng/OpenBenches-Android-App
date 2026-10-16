@@ -14,9 +14,8 @@ android {
     // Native Auth0 client id (do NOT embed a client secret in the Android app)
     val auth0ClientId = (project.findProperty("AUTH0_CLIENT_ID") as String?) ?: "ulXaB9bSF2Bar9UtM5NhFBWBUAesrorM"
     val auth0Scheme = (project.findProperty("AUTH0_SCHEME") as String?) ?: "openbenches"
-    // Override these to point the app at a local backend, e.g. -Popenbenches.baseUrl=http://10.0.2.2:8000/
+    // Override this to point the app at a local backend, e.g. -Popenbenches.baseUrl=http://10.0.2.2:8000/
     val openbenchesBaseUrl = (project.findProperty("openbenches.baseUrl") as String?) ?: "https://openbenches.org/"
-    val opencageBaseUrl = (project.findProperty("opencage.baseUrl") as String?) ?: "https://api.opencagedata.com/"
 
     defaultConfig {
         applicationId = "org.openbenches"
@@ -33,7 +32,6 @@ android {
         buildConfigField("String", "AUTH0_CLIENT_ID", "\"$auth0ClientId\"")
         buildConfigField("String", "AUTH0_SCHEME", "\"$auth0Scheme\"")
         buildConfigField("String", "OPENBENCHES_BASE_URL", "\"$openbenchesBaseUrl\"")
-        buildConfigField("String", "OPENCAGE_BASE_URL", "\"$opencageBaseUrl\"")
     }
 
     buildTypes {

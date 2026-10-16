@@ -43,6 +43,8 @@ data class BenchMedia(
 data class BenchDetailsProperties(
     @SerializedName("popupContent") val popupContent: String?,
     @SerializedName("created_at") val createdAt: String?,
+    /** The place name stored when the bench was added (reverse geocoded by the website). */
+    @SerializedName("address") val address: String?,
     @SerializedName("media") val media: List<BenchMedia>?
 )
 
@@ -194,40 +196,4 @@ suspend fun fetchBenchesBySearch(query: String): List<Bench> {
             popupContent = cleanInscription(it.properties.popupContent)
         )
     }
-} 
-
-/**
- * Data class for OpenCageData API response
- */
-data class OpenCageResponse(
-    val results: List<OpenCageResult>?
-)
-
-data class OpenCageResult(
-    val formatted: String?
-)
-
-/**
- * Retrofit service for OpenCageData API
- */
-interface OpenCageService {
-    @GET("geocode/v1/json")
-    suspend fun reverseGeocode(
-        @Query("q") latlng: String,
-        @Query("key") apiKey: String
-    ): OpenCageResponse
 }
-
-/**
- * Fetches address from OpenCageData API for given latitude and longitude
- * @return formatted address or null
- */
-suspend fun fetchAddressFromLatLng(latitude: Double, longitude: Double): String? {
-    val retrofit = Retrofit.Builder()
-        .baseUrl(BuildConfig.OPENCAGE_BASE_URL)
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
-    val service = retrofit.create(OpenCageService::class.java)
-    val response = service.reverseGeocode("$latitude,$longitude", "d78d11599647436f9277f344dcc8a5ee")
-    return response.results?.firstOrNull()?.formatted
-} 

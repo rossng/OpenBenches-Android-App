@@ -91,7 +91,6 @@ fun BenchSheet(
     bench: Bench,
     stack: List<Bench>,
     details: DetailsState?,
-    address: String?,
     distance: String?,
     actions: BenchSheetActions,
     modifier: Modifier = Modifier,
@@ -99,6 +98,7 @@ fun BenchSheet(
     val feature = (details as? DetailsState.Loaded)?.feature
     val inscription = feature?.properties?.popupContent?.let(::cleanInscription) ?: bench.popupContent
     val photos = feature?.properties?.media.orEmpty().filter { it.url.startsWith("/image/") }
+    val address = feature?.properties?.address
 
     Column(
         modifier
@@ -179,13 +179,11 @@ fun BenchSheet(
             Modifier.fillMaxWidth().panel(SkyBlue, Texture.Paper).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Filled.Place, contentDescription = null, modifier = Modifier.size(20.dp))
-                Text(
-                    address ?: "Finding address…",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.testTag("address"),
-                )
+            if (address != null) {
+                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Filled.Place, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Text(address, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.testTag("address"))
+                }
             }
             feature?.properties?.createdAt?.let(::formatAdded)?.let {
                 Text("Added $it", style = MaterialTheme.typography.bodyMedium)

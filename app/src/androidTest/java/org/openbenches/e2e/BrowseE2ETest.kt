@@ -48,7 +48,7 @@ class BrowseE2ETest {
         compose.onNodeWithTag("inscription").assertTextContains(Fixtures.INSCRIPTION_MARKER, substring = true)
         compose.waitUntilAtLeastOneExists(hasTestTag("photos"), timeoutMillis = 20_000)
         compose.onNodeWithContentDescription("Bench photo: Inscription").assertExists()
-        compose.waitUntilAtLeastOneExists(hasText(Fixtures.FAKE_ADDRESS), timeoutMillis = 20_000)
+        compose.waitUntilAtLeastOneExists(hasText(Fixtures.ADDRESS), timeoutMillis = 20_000)
     }
 
     @Test

@@ -41,7 +41,6 @@ emulator -avd openbenches_e2e &   # add -no-window to run headless
   which adds the Docker setup (`dev/`). Override `OPENBENCHES_REPO` / `OPENBENCHES_REF` to test another commit.
 - **db**: MariaDB seeded with the website's sample database plus `fixtures.sql` (bench 900001 at 0.5,0.5,
   with a photo in `photos/`). `./up.sh --reset` wipes and re-seeds it.
-- **fakes**: stand-ins for third-party APIs on <http://localhost:8001> (currently OpenCage reverse geocoding).
 
 The sample database has no photos. `./fetch-photos.sh LAT LNG` downloads the real ones (CC BY-SA) from
 openbenches.org for benches near a location, e.g. `./fetch-photos.sh 51.3811 -2.3590` for Bath. They're gitignored.
@@ -49,7 +48,7 @@ openbenches.org for benches near a location, e.g. `./fetch-photos.sh 51.3811 -2.
 ## Running the app by hand against the local backend
 
 ```sh
-./gradlew installDebug -Popenbenches.baseUrl=http://10.0.2.2:8000/ -Popencage.baseUrl=http://10.0.2.2:8001/
+./gradlew installDebug -Popenbenches.baseUrl=http://10.0.2.2:8000/
 ```
 
 `10.0.2.2` is your Mac as seen from the emulator. Debug builds allow plain HTTP to it
@@ -58,6 +57,6 @@ openbenches.org for benches near a location, e.g. `./fetch-photos.sh 51.3811 -2.
 ## Not covered yet
 
 - Login and upload: the app source in this repo has no Auth0 or upload code yet, though `app/build.gradle.kts`
-  already configures Auth0. Testing those will need a fake Auth0 (OIDC + JWKS) and a fake StadiaMaps geocoder
-  in `fakes`, since the server calls both when a bench is added.
+  already configures Auth0. Testing those will need local fakes for Auth0 (OIDC + JWKS) and the StadiaMaps
+  geocoder, since the server calls both when a bench is added.
 - Map tiles (OpenStreetMap) and the About/Privacy WebViews still load from the internet.
