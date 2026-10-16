@@ -1,6 +1,7 @@
 package org.openbenches.data
 
 import com.google.gson.annotations.SerializedName
+import org.openbenches.BuildConfig
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
@@ -89,7 +90,12 @@ interface OpenBenchesService {
 
     @Headers("Accept: application/json")
     @GET("bench/{id}")
-    suspend fun getBenchDetails(@Path("id") id: Int, @Query("truncated") truncated: Boolean = false): BenchDetailsResponse
+    suspend fun getBenchDetails(
+        @Path("id") id: Int,
+        @Query("truncated") truncated: Boolean = false,
+        // The API omits media unless asked for it.
+        @Query("media") media: Boolean = true
+    ): BenchDetailsResponse
 
     @Headers("Accept: application/json")
     @GET("search")
@@ -114,17 +120,25 @@ data class Properties(
     @SerializedName("popupContent") val popupContent: String
 )
 
+private val openBenchesService: OpenBenchesService by lazy {
+    Retrofit.Builder()
+        .baseUrl(BuildConfig.OPENBENCHES_BASE_URL + "api/")
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+        .create(OpenBenchesService::class.java)
+}
+
+/**
+ * Returns the absolute URL of a media item, whose API `URL` is a site-relative path like `/image/<sha1>`.
+ */
+fun mediaUrl(path: String): String = BuildConfig.OPENBENCHES_BASE_URL.trimEnd('/') + path
+
 /**
  * Fetches benches from the OpenBenches API and maps to simplified Bench objects.
  * @return List of benches
  */
 suspend fun fetchBenches(): List<Bench> {
-    val retrofit = Retrofit.Builder()
-        .baseUrl("https://openbenches.org/api/")
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
-    val service = retrofit.create(OpenBenchesService::class.java)
-    return service.getBenches().features.map {
+    return openBenchesService.getBenches().features.map {
         Bench(
             id = it.id,
             coordinates = it.geometry.coordinates,
@@ -138,12 +152,7 @@ suspend fun fetchBenches(): List<Bench> {
  * @return List of benches
  */
 suspend fun fetchBenchesNearby(latitude: Double, longitude: Double, distance: Int = 200): List<Bench> {
-    val retrofit = Retrofit.Builder()
-        .baseUrl("https://openbenches.org/api/")
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
-    val service = retrofit.create(OpenBenchesService::class.java)
-    return service.getBenchesNearby(latitude, longitude, distance).features.map {
+    return openBenchesService.getBenchesNearby(latitude, longitude, distance).features.map {
         Bench(
             id = it.id,
             coordinates = it.geometry.coordinates,
@@ -157,12 +166,7 @@ suspend fun fetchBenchesNearby(latitude: Double, longitude: Double, distance: In
  * @return BenchDetailsResponse for the bench
  */
 suspend fun fetchBenchDetails(id: Int): BenchDetailsResponse {
-    val retrofit = Retrofit.Builder()
-        .baseUrl("https://openbenches.org/api/")
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
-    val service = retrofit.create(OpenBenchesService::class.java)
-    return service.getBenchDetails(id, truncated = false)
+    return openBenchesService.getBenchDetails(id, truncated = false)
 }
 
 /**
@@ -170,12 +174,7 @@ suspend fun fetchBenchDetails(id: Int): BenchDetailsResponse {
  * @return List of benches
  */
 suspend fun fetchBenchesBySearch(query: String): List<Bench> {
-    val retrofit = Retrofit.Builder()
-        .baseUrl("https://openbenches.org/api/")
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
-    val service = retrofit.create(OpenBenchesService::class.java)
-    return service.searchBenches(query).features.map {
+    return openBenchesService.searchBenches(query).features.map {
         Bench(
             id = it.id,
             coordinates = it.geometry.coordinates,
@@ -212,7 +211,7 @@ interface OpenCageService {
  */
 suspend fun fetchAddressFromLatLng(latitude: Double, longitude: Double): String? {
     val retrofit = Retrofit.Builder()
-        .baseUrl("https://api.opencagedata.com/")
+        .baseUrl(BuildConfig.OPENCAGE_BASE_URL)
         .addConverterFactory(GsonConverterFactory.create())
         .build()
     val service = retrofit.create(OpenCageService::class.java)

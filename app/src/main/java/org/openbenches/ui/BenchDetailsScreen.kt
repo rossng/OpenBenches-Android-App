@@ -65,6 +65,7 @@ import java.time.format.DateTimeParseException
 import java.util.Locale
 import androidx.compose.foundation.layout.height
 import org.openbenches.data.fetchAddressFromLatLng
+import org.openbenches.data.mediaUrl
 import androidx.compose.ui.viewinterop.AndroidView
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -169,7 +170,7 @@ fun BenchDetailsScreen(benchId: Int, onBack: (lat: Double?, lng: Double?) -> Uni
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
-                                    val imageUrl = "https://openbenches.org" + image.url
+                                    val imageUrl = mediaUrl(image.url)
                                     AsyncImage(
                                         model = imageUrl,
                                         contentDescription = "Bench photo",
@@ -273,7 +274,7 @@ fun BenchDetailsScreen(benchId: Int, onBack: (lat: Double?, lng: Double?) -> Uni
                     // Fullscreen image dialog
                     if (fullscreenImageIndex.value != null && fullscreenImageIndex.value!! < benchImages.size) {
                         FullscreenImageDialog(
-                            imageUrls = benchImages.map { "https://openbenches.org" + it.url },
+                            imageUrls = benchImages.map { mediaUrl(it.url) },
                             currentIndex = fullscreenImageIndex,
                             onDismiss = { fullscreenImageIndex.value = null }
                         )
