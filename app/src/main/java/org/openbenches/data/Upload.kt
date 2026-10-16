@@ -20,7 +20,7 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.coroutineContext
 
-/** A photo ready to upload: a JPEG with the bench's location in its EXIF, and what it shows. */
+/** A photo ready to upload, and what it shows. The first one must have a location in its EXIF. */
 data class UploadPhoto(val file: File, val mediaType: String)
 
 /** Everything the website's /upload endpoint takes for a new bench. */
@@ -91,7 +91,7 @@ fun uploadErrorMessage(code: Int, body: String): String {
         .replace(Regex("<[^>]+>"), " ").replace(Regex("\\s+"), " ").trim()
     return when {
         code == 415 && plain.contains("location", ignoreCase = true) ->
-            "The server couldn't find a location in the first photo. Set the bench's location and try again."
+            "The first photo has no location. Choose a photo taken with location turned on in your camera."
         code == 415 -> "The server didn't receive a photo. Try again."
         code == 401 -> "Your sign-in has expired. Sign in again, then retry."
         code == 403 -> plain.ifEmpty { "You can't add benches with this account." }

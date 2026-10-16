@@ -294,15 +294,7 @@ fun BrowseScreen(vm: BrowseViewModel = viewModel()) {
                 // The website's gold "Add bench" button, as the map's main action.
                 AnimatedVisibility(visible = selected == null) {
                     ExtendedFloatingActionButton(
-                        onClick = {
-                            addSession++
-                            adding = true
-                            // Seed the new bench's pin with a fresh location if we have one.
-                            scope.launch {
-                                (mapController.myLocation()?.let { it.latitude to it.longitude } ?: lastKnownLocation(context))
-                                    ?.let { userLocation = it }
-                            }
-                        },
+                        onClick = { addSession++; adding = true },
                         icon = { Icon(Icons.Filled.Add, contentDescription = null) },
                         text = { Text("Add bench", style = MaterialTheme.typography.titleMedium) },
                         containerColor = PlaqueGold,
@@ -337,7 +329,6 @@ fun BrowseScreen(vm: BrowseViewModel = viewModel()) {
             val addVm: AddBenchViewModel = viewModel(key = "add-bench-$addSession")
             AddBenchScreen(
                 vm = addVm,
-                deviceLocation = userLocation,
                 onClose = { adding = false },
                 onAdded = { bench ->
                     adding = false

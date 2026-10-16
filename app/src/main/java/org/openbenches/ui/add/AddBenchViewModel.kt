@@ -18,17 +18,19 @@ import org.openbenches.data.UploadPhoto
 import org.openbenches.data.fetchTags
 import org.openbenches.data.preparePhoto
 import org.openbenches.data.readText
-import org.openbenches.data.stampLocation
 import org.openbenches.data.uploadBench
 import java.io.File
 import java.io.IOException
 import java.util.UUID
 
-/** A photo in the bench being added, and what it shows (one of [MEDIA_TYPES]). */
-data class DraftPhoto(val id: String, val file: File, val mediaType: String)
+/**
+ * A photo in the bench being added, what it shows (one of [MEDIA_TYPES]), and the location in
+ * its own metadata, if any.
+ */
+data class DraftPhoto(val id: String, val file: File, val mediaType: String, val takenAt: Pair<Double, Double>?)
 
-/** Where the pin's position came from, so the screen can say. */
-enum class LocationSource { Photo, Device, Map }
+/** The website's help page for phones that don't geotag photos. */
+const val GPS_HELP_URL = "https://www.openbenches.org/blog/android-gps-problems/"
 
 /** The website's media types for photos, in the order its add page offers them. */
 val MEDIA_TYPES = listOf("inscription" to "Inscription", "bench" to "The bench", "view" to "View from the bench")
@@ -54,9 +56,13 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
     var textNote by mutableStateOf<String?>(null)
         private set
 
+    /**
+     * Where the bench is. Like the website, it comes from the first photo's own location and can
+     * then be fine-tuned on the map; it's never taken from the phone's GPS.
+     */
     var location by mutableStateOf<Pair<Double, Double>?>(null)
         private set
-    var locationSource by mutableStateOf<LocationSource?>(null)
+    var pinMoved by mutableStateOf(false)
         private set
 
     var tags by mutableStateOf<List<Tag>>(emptyList())
@@ -77,9 +83,9 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
     /** Why the bench can't be added yet, or null when it can. */
     val missing: String?
         get() = when {
-            photos.isEmpty() -> "Add at least one photo of the bench"
+            photos.isEmpty() -> "Add a geotagged photo of the bench"
+            location == null -> "The first photo needs a location. Remove it or add a geotagged photo first."
             inscription.isBlank() -> "Type the inscription"
-            location == null -> "Set where the bench is"
             else -> null
         }
 
@@ -105,40 +111,66 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
 
     fun addPhoto(uri: Uri) = addPhotos(listOf(uri))
 
-    /** Adds photos in the order given (the picker's selection order), one at a time. */
+    /**
+     * Adds photos in the order given. As on the website, the bench's first photo must carry a
+     * location: if the bench has no photos yet, the first geotagged one in [uris] goes first, and
+     * if none is geotagged nothing is added.
+     */
     fun addPhotos(uris: List<Uri>) {
         if (uris.isEmpty()) return
         preparingPhoto = true
         photoError = null
         viewModelScope.launch {
-            for (uri in uris) {
-                if (photos.size >= MAX_PHOTOS) break
-                addPreparedPhoto(uri)
+            try {
+                val prepared = mutableListOf<DraftPhoto>()
+                for (uri in uris.take(MAX_PHOTOS - photos.size)) {
+                    val p = preparePhoto(app, uri, workDir)
+                    prepared += DraftPhoto(p.file.name, p.file, mediaType = "", takenAt = p.takenAt)
+                }
+                val ordered = if (photos.isEmpty()) {
+                    val first = prepared.firstOrNull { it.takenAt != null }
+                    if (first == null) {
+                        prepared.forEach { it.file.delete() }
+                        photoError = if (prepared.size == 1) {
+                            "This photo has no location. OpenBenches needs a photo taken with location (geotagging) turned on in your camera."
+                        } else {
+                            "None of these photos has a location. OpenBenches needs a photo taken with location (geotagging) turned on in your camera."
+                        }
+                        return@launch
+                    }
+                    listOf(first) + prepared.filter { it !== first }
+                } else prepared
+                ordered.forEach { photo ->
+                    // Like the website's add page: the first photo is the inscription, then the bench, then the view.
+                    photos.add(photo.copy(mediaType = MEDIA_TYPES.getOrNull(photos.size)?.first ?: "bench"))
+                }
+                updateLocationFromFirstPhoto()
+                photos.firstOrNull { it.mediaType == "inscription" }?.let { if (inscription.isBlank()) readInscription(it) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                photoError = "Couldn't use that photo. Try another one."
+            } finally {
+                preparingPhoto = false
             }
-            preparingPhoto = false
-        }
-    }
-
-    private suspend fun addPreparedPhoto(uri: Uri) {
-        try {
-            val prepared = preparePhoto(app, uri, workDir)
-            // Like the website's add page: the first photo is the inscription, then the bench, then the view.
-            val type = MEDIA_TYPES.getOrNull(photos.size)?.first ?: "bench"
-            val photo = DraftPhoto(prepared.file.name, prepared.file, type)
-            photos.add(photo)
-            val takenAt = prepared.takenAt
-            if (takenAt != null && locationSource != LocationSource.Map) setLocation(takenAt, LocationSource.Photo)
-            if (type == "inscription" && inscription.isBlank()) readInscription(photo)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            photoError = "Couldn't use that photo. Try another one."
         }
     }
 
     fun removePhoto(photo: DraftPhoto) {
         photos.remove(photo)
         photo.file.delete()
+        updateLocationFromFirstPhoto()
+    }
+
+    /** The pin starts at the first photo's location, and resets when the first photo changes. */
+    private var locationPhotoId: String? = null
+
+    private fun updateLocationFromFirstPhoto() {
+        val first = photos.firstOrNull()
+        if (first?.id == locationPhotoId) return
+        locationPhotoId = first?.id
+        location = first?.takenAt
+        pinMoved = false
     }
 
     fun setMediaType(photo: DraftPhoto, type: String) {
@@ -178,23 +210,18 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    /** The user's current location, used only until a photo or the map says otherwise. */
-    fun offerDeviceLocation(latLng: Pair<Double, Double>) {
-        if (location == null || locationSource == LocationSource.Device) setLocation(latLng, LocationSource.Device)
-    }
-
-    fun useDeviceLocation(latLng: Pair<Double, Double>) = setLocation(latLng, LocationSource.Device)
-
-    /** The user moved the map under the pin. */
+    /** The user fine-tuned the pin on the map (only possible once a photo has set it). */
     fun moveLocation(latLng: Pair<Double, Double>) {
-        val current = location
-        if (current != null && kotlin.math.abs(current.first - latLng.first) < 1e-7 && kotlin.math.abs(current.second - latLng.second) < 1e-7) return
-        setLocation(latLng, LocationSource.Map)
+        val current = location ?: return
+        if (kotlin.math.abs(current.first - latLng.first) < 1e-7 && kotlin.math.abs(current.second - latLng.second) < 1e-7) return
+        location = latLng
+        pinMoved = true
     }
 
-    private fun setLocation(latLng: Pair<Double, Double>, source: LocationSource) {
-        location = latLng
-        locationSource = source
+    /** Puts the pin back on the first photo's location. */
+    fun resetPin() {
+        location = photos.firstOrNull()?.takenAt
+        pinMoved = false
     }
 
     fun toggleTag(tag: String) {
@@ -209,7 +236,6 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
         submitError = null
         viewModelScope.launch {
             try {
-                photos.forEach { stampLocation(it.file, where.first, where.second) }
                 addedBenchId = uploadBench(
                     NewBench(
                         inscription = inscription.trim(),

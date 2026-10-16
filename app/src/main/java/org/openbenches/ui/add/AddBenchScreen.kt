@@ -5,7 +5,6 @@ import android.content.Context
 import android.view.MotionEvent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -72,6 +71,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -113,17 +113,16 @@ import kotlin.math.abs
 
 /**
  * Adding a bench, laid out like the website's add page: photos, the inscription on a plaque,
- * where it is, and tags. [deviceLocation] seeds the pin until a photo or the user moves it.
+ * where it is, and tags. As on the website, the first photo must be geotagged: its location places
+ * the pin, which can then be fine-tuned.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AddBenchScreen(
     vm: AddBenchViewModel,
-    deviceLocation: Pair<Double, Double>?,
     onClose: () -> Unit,
     onAdded: (Bench) -> Unit,
 ) {
-    LaunchedEffect(deviceLocation) { deviceLocation?.let(vm::offerDeviceLocation) }
     LaunchedEffect(vm.addedBenchId) {
         val id = vm.addedBenchId ?: return@LaunchedEffect
         val where = vm.location ?: return@LaunchedEffect
@@ -134,7 +133,8 @@ fun AddBenchScreen(
     val close = { if (vm.hasContent) confirmDiscard = true else onClose() }
     BackHandler(enabled = !vm.submitting, onBack = close)
 
-    val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_PHOTOS)) { uris ->
+    // The system file chooser rather than the photo picker: the picker strips photos' location.
+    val gallery = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         vm.addPhotos(uris.take(MAX_PHOTOS - vm.photos.size))
     }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved -> vm.onCameraResult(saved) }
@@ -161,14 +161,14 @@ fun AddBenchScreen(
             PhotosPanel(
                 vm = vm,
                 onTakePhoto = { camera.launch(vm.newCameraUri()) },
-                onChoosePhotos = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                onChoosePhotos = { gallery.launch(arrayOf("image/*")) },
             )
 
             StepLabel("2 · Inscription")
             InscriptionPanel(vm)
 
             StepLabel("3 · Where is it?")
-            LocationPanel(vm, deviceLocation)
+            LocationPanel(vm)
 
             if (vm.tags.isNotEmpty()) {
                 StepLabel("4 · Tags (optional)")
@@ -246,14 +246,28 @@ private fun PhotosPanel(vm: AddBenchViewModel, onTakePhoto: () -> Unit, onChoose
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (vm.photos.isEmpty()) {
-            Text("Start with a clear photo of the inscription. Up to $MAX_PHOTOS photos.", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Start with a geotagged photo of the inscription: one taken with location turned on in your camera. Up to $MAX_PHOTOS photos.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
         } else {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.testTag("draftPhotos")) {
                 items(vm.photos, key = { it.id }) { photo -> PhotoTile(photo, vm) }
             }
         }
         if (vm.preparingPhoto) LinearProgressIndicator(Modifier.fillMaxWidth(), color = SoftBlack, trackColor = PlaqueGold)
-        vm.photoError?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error) }
+        vm.photoError?.let { message ->
+            val uriHandler = LocalUriHandler.current
+            Column(
+                Modifier.fillMaxWidth().panel(SoftWhite, Texture.Paper, MaterialTheme.shapes.small, 2.dp).padding(12.dp).testTag("photoError"),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(message, style = MaterialTheme.typography.bodyMedium)
+                TextButton(onClick = { uriHandler.openUri(GPS_HELP_URL) }, contentPadding = PaddingValues(0.dp)) {
+                    Text("How to turn on photo location", color = SoftBlack, style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
         if (vm.photos.size < MAX_PHOTOS) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PanelButton("Take photo", Icons.Filled.PhotoCamera, onTakePhoto, Modifier.weight(1f))
@@ -342,49 +356,44 @@ private fun InscriptionPanel(vm: AddBenchViewModel) {
 }
 
 @Composable
-private fun LocationPanel(vm: AddBenchViewModel, deviceLocation: Pair<Double, Double>?) {
+private fun LocationPanel(vm: AddBenchViewModel) {
     Column(
         Modifier.fillMaxWidth().panel(SkyBlue, Texture.Paper).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        val location = vm.location
+        if (location == null) {
+            Text(
+                if (vm.photos.isEmpty()) "The location comes from your first photo."
+                else "Your first photo has no location. Remove it, or add a geotagged photo.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            return@Column
+        }
         val shape = RoundedCornerShape(12.dp)
         Box(Modifier.fillMaxWidth().height(240.dp).border(PanelBorder, BorderBlack, shape).clip(shape).testTag("locationMap")) {
-            PinMap(vm.location, onMoved = vm::moveLocation)
+            PinMap(location, onMoved = vm::moveLocation)
             // The pin stays put while the map moves under it, as in map apps' "set location" screens.
             Image(
                 painterResource(R.drawable.marker),
                 contentDescription = "Bench position",
                 modifier = Modifier.align(Alignment.Center).width(48.dp).offset(y = (-16).dp),
             )
-            if (vm.location == null) {
-                Text(
-                    "Waiting for your location…",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp).panel(SoftWhite, Texture.Paper, RoundedCornerShape(50), 1.dp)
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                )
-            }
         }
         Text(
-            when (vm.locationSource) {
-                LocationSource.Photo -> "From your photo's location. Move the map to put the pin on the bench."
-                LocationSource.Device -> "Your current location. Move the map to put the pin on the bench."
-                LocationSource.Map -> "Set on the map."
-                null -> "Move the map to put the pin on the bench."
-            },
+            if (vm.pinMoved) "Moved from your photo's location."
+            else "From your photo's location. Move the map if the pin isn't on the bench.",
             style = MaterialTheme.typography.bodyMedium,
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                vm.location?.let { String.format(Locale.UK, "%.6f, %.6f", it.first, it.second) } ?: "–",
+                String.format(Locale.UK, "%.6f, %.6f", location.first, location.second),
                 style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
                 modifier = Modifier.weight(1f),
             )
-            if (deviceLocation != null && vm.locationSource != LocationSource.Device) {
-                TextButton(onClick = { vm.useDeviceLocation(deviceLocation) }) {
-                    Icon(Icons.Filled.MyLocation, contentDescription = null, tint = SoftBlack, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Use my location", color = SoftBlack, style = MaterialTheme.typography.labelLarge)
+            if (vm.pinMoved) {
+                TextButton(onClick = vm::resetPin) {
+                    Text("Reset", color = SoftBlack, style = MaterialTheme.typography.labelLarge)
                 }
             }
         }

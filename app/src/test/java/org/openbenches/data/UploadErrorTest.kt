@@ -8,7 +8,7 @@ class UploadErrorTest {
     fun missingLocationIsExplained() {
         val body = "No location metadata found in image.<br><a href=\"/add\">Please reload this page and try a different photo</a>"
         assertEquals(
-            "The server couldn't find a location in the first photo. Set the bench's location and try again.",
+            "The first photo has no location. Choose a photo taken with location turned on in your camera.",
             uploadErrorMessage(415, body),
         )
     }

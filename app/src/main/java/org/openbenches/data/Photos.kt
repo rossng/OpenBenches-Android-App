@@ -22,10 +22,18 @@ data class PreparedPhoto(val file: File, val takenAt: Pair<Double, Double>?)
 
 private const val MAX_EDGE = 4096
 
+private val KEPT_TAGS = listOf(
+    ExifInterface.TAG_GPS_LATITUDE, ExifInterface.TAG_GPS_LATITUDE_REF,
+    ExifInterface.TAG_GPS_LONGITUDE, ExifInterface.TAG_GPS_LONGITUDE_REF,
+    ExifInterface.TAG_GPS_ALTITUDE, ExifInterface.TAG_GPS_ALTITUDE_REF,
+    ExifInterface.TAG_DATETIME, ExifInterface.TAG_DATETIME_ORIGINAL,
+    ExifInterface.TAG_MAKE, ExifInterface.TAG_MODEL,
+)
+
 /**
- * Copies a photo from the camera or picker into [dir] as a JPEG. JPEGs are copied byte for byte;
- * anything else (HEIC, PNG…) is re-encoded. The photo picker removes location data, so
- * [PreparedPhoto.takenAt] is usually only set for photos from the camera.
+ * Copies a photo from the camera or the file chooser into [dir] as a JPEG. JPEGs are copied byte
+ * for byte; anything else (HEIC, PNG…) is re-encoded, keeping its location and camera details.
+ * Photos must come from the file chooser rather than the photo picker, which strips location.
  */
 suspend fun preparePhoto(context: Context, source: Uri, dir: File): PreparedPhoto = withContext(Dispatchers.IO) {
     dir.mkdirs()
@@ -45,20 +53,16 @@ suspend fun preparePhoto(context: Context, source: Uri, dir: File): PreparedPhot
         }
         out.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 92, it) }
         bitmap.recycle()
+        // Keep the original's location and camera details (e.g. from a HEIC), which re-encoding drops.
+        runCatching {
+            val original = resolver.openInputStream(source)!!.use { ExifInterface(it) }
+            val copy = ExifInterface(out)
+            KEPT_TAGS.forEach { tag -> original.getAttribute(tag)?.let { copy.setAttribute(tag, it) } }
+            copy.saveAttributes()
+        }
     }
     val takenAt = runCatching { ExifInterface(out).latLong }.getOrNull()?.let { it[0] to it[1] }
     PreparedPhoto(out, takenAt)
-}
-
-/**
- * Writes the bench's location into the photo's EXIF. The website only accepts a bench whose
- * first photo is geotagged, and Android strips location from photos picked from the gallery.
- */
-suspend fun stampLocation(file: File, latitude: Double, longitude: Double) = withContext(Dispatchers.IO) {
-    ExifInterface(file).apply {
-        setLatLong(latitude, longitude)
-        saveAttributes()
-    }
 }
 
 /** Reads the text in a photo on the device (ML Kit), for pre-filling the inscription. */

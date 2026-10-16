@@ -27,7 +27,7 @@ import java.util.UUID
 
 /**
  * Adds benches to the local OpenBenches backend (e2e/backend) the way the app does, and reads
- * them back through the API. Uses a photo with no GPS data, as the photo picker returns.
+ * them back through the API. As on the website, the first photo must carry its own location.
  */
 @RunWith(AndroidJUnit4::class)
 class AddBenchE2ETest {
@@ -46,6 +46,10 @@ class AddBenchE2ETest {
         return file
     }
 
+    /** A photo geotagged by its camera at [latitude], [longitude]. */
+    private fun photoTakenAt(latitude: Double, longitude: Double): File =
+        photoWithoutLocation().also { ExifInterface(it).apply { setLatLong(latitude, longitude); saveAttributes() } }
+
     @Test
     fun addingABenchStoresItsPhotosLocationAndTags() {
         val marker = "E2E ADDED ${UUID.randomUUID().toString().take(8)}"
@@ -53,11 +57,15 @@ class AddBenchE2ETest {
 
         instrumentation.runOnMainSync {
             vm.inscription = marker
-            vm.addPhotos(listOf(Uri.fromFile(photoWithoutLocation()), Uri.fromFile(photoWithoutLocation())))
+            vm.addPhotos(listOf(Uri.fromFile(photoTakenAt(51.38123, -2.35987)), Uri.fromFile(photoWithoutLocation())))
         }
         waitFor("photos to be prepared") { vm.photos.size == 2 && !vm.preparingPhoto }
         instrumentation.runOnMainSync {
-            vm.moveLocation(51.38123 to -2.35987)
+            // The pin starts at the first photo's own location...
+            assertEquals(51.38123, vm.location!!.first, 1e-5)
+            assertEquals(-2.35987, vm.location!!.second, 1e-5)
+            // ...and can be fine-tuned, as on the website.
+            vm.moveLocation(51.38130 to -2.35990)
             vm.toggleTag("dog")
             assertNull(vm.missing)
             vm.submit()
@@ -68,16 +76,48 @@ class AddBenchE2ETest {
         val feature = runBlocking { fetchBenchDetails(vm.addedBenchId!!) }.features!!.single()
         val props = feature.properties!!
         assertEquals(marker, props.popupContent)
-        assertEquals(51.38123, feature.geometry!!.coordinates!![1], 1e-4)
-        assertEquals(-2.35987, feature.geometry!!.coordinates!![0], 1e-4)
+        assertEquals(51.38130, feature.geometry!!.coordinates!![1], 1e-4)
+        assertEquals(-2.35990, feature.geometry!!.coordinates!![0], 1e-4)
         assertEquals(listOf("inscription", "bench"), props.media!!.map { it.mediaType })
         // Geocoded by the server (against the local Stadia Maps fake) when the bench was added.
         assertEquals("Fixture Park, Testville, Testshire, England, United Kingdom", props.address)
     }
 
     @Test
+    fun aFirstPhotoWithoutLocationIsRefused() {
+        val vm = instrumentation.runOnMainSyncReturning { AddBenchViewModel(app) }
+
+        instrumentation.runOnMainSync { vm.addPhotos(listOf(Uri.fromFile(photoWithoutLocation()))) }
+        waitFor("the photo to be checked") { !vm.preparingPhoto && vm.photoError != null }
+
+        instrumentation.runOnMainSync {
+            assertTrue(vm.photos.isEmpty())
+            assertNull(vm.location)
+            assertTrue(vm.photoError!!, vm.photoError!!.contains("no location"))
+        }
+    }
+
+    @Test
+    fun aGeotaggedPhotoGoesFirstWhenPickedWithOthers() {
+        val vm = instrumentation.runOnMainSyncReturning { AddBenchViewModel(app) }
+        val geotagged = photoTakenAt(51.5, -0.1)
+
+        instrumentation.runOnMainSync {
+            vm.inscription = "x" // skip text recognition
+            vm.addPhotos(listOf(Uri.fromFile(photoWithoutLocation()), Uri.fromFile(geotagged)))
+        }
+        waitFor("photos to be prepared") { vm.photos.size == 2 && !vm.preparingPhoto }
+
+        instrumentation.runOnMainSync {
+            assertEquals(51.5, vm.photos.first().takenAt!!.first, 1e-5)
+            assertEquals("inscription", vm.photos.first().mediaType)
+            assertEquals(51.5, vm.location!!.first, 1e-5)
+        }
+    }
+
+    @Test
     fun theServerRejectsAPhotoWithoutLocation() = runBlocking {
-        // Why the app writes the location into every photo before uploading.
+        // The server's own rule, which the app checks before uploading.
         try {
             uploadBench(NewBench("E2E NO LOCATION", 51.38, -2.36, emptyList(), listOf(UploadPhoto(photoWithoutLocation(), "inscription"))))
             fail("expected the upload to be rejected")
