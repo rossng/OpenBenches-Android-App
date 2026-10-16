@@ -38,14 +38,21 @@ private val uploadClient = OkHttpClient.Builder()
     .connectTimeout(20, TimeUnit.SECONDS)
     .writeTimeout(3, TimeUnit.MINUTES) // several full-size photos on a slow connection
     .readTimeout(90, TimeUnit.SECONDS) // the server geocodes and stores photos before replying
+    // A successful upload answers directly; a redirect means the website wants a fresh sign-in.
+    .followRedirects(false)
     .build()
 
 /**
  * Adds a bench the way the website's add page does (POST /upload, multipart). Without
- * [idToken] the bench is added anonymously; with an Auth0 ID token it's credited to that user.
+ * [headers] (from AccountService.uploadHeaders) the bench is added anonymously; with them it's credited to that user.
  * Reports progress from 0 to 1 as the photos are sent. Returns the new bench's ID.
  */
-suspend fun uploadBench(bench: NewBench, idToken: String? = null, onProgress: (Float) -> Unit = {}): Int =
+suspend fun uploadBench(
+    bench: NewBench,
+    headers: Map<String, String> = emptyMap(),
+    path: String = "upload",
+    onProgress: (Float) -> Unit = {},
+): Int =
     withContext(Dispatchers.IO) {
         require(bench.photos.size in 1..4) { "A bench needs 1 to 4 photos" }
         val total = bench.photos.sumOf { it.file.length() }.coerceAtLeast(1)
@@ -71,9 +78,9 @@ suspend fun uploadBench(bench: NewBench, idToken: String? = null, onProgress: (F
         }.build()
 
         val request = Request.Builder()
-            .url(BuildConfig.OPENBENCHES_BASE_URL + "upload")
+            .url(BuildConfig.OPENBENCHES_BASE_URL + path)
             .post(body)
-            .apply { if (idToken != null) header("Auth0-Authorization", idToken) }
+            .apply { headers.forEach { (name, value) -> header(name, value) } }
             .build()
 
         val call = uploadClient.newCall(request)
@@ -93,6 +100,7 @@ fun uploadErrorMessage(code: Int, body: String): String {
         code == 415 && plain.contains("location", ignoreCase = true) ->
             "The first photo has no location. Choose a photo taken with location turned on in your camera."
         code == 415 -> "The server didn't receive a photo. Try again."
+        code in 300..399 -> "Your OpenBenches sign-in has expired. Sign in again, or sign out to add the bench anonymously."
         code == 401 -> "OpenBenches didn't accept your sign-in. Sign out to add the bench anonymously, or try signing in again."
         code == 403 -> plain.ifEmpty { "You can't add benches with this account." }
         code == 413 -> "The photos are too large to upload. Try fewer photos."

@@ -47,18 +47,30 @@ interface AccountService {
     /** A current ID token for uploads, refreshed if needed; null when signed out. Throws [SignInExpired]. */
     suspend fun idToken(): String?
 
+    /** Where to post new benches, relative to the site. */
+    val uploadPath: String get() = "upload"
+
+    /** Headers that credit an upload to the signed-in account; empty when signed out. Throws [SignInExpired]. */
+    suspend fun uploadHeaders(): Map<String, String> =
+        idToken()?.let { mapOf("Auth0-Authorization" to it) } ?: emptyMap()
+
     companion object {
         @Volatile private var instance: AccountService? = null
 
         /**
-         * The app's account service: Auth0, or in debug builds made with -Pauth.fakeUrl, the local
-         * fake Auth0 (e2e/backend/fake-auth0) so sign-in can be tested without a real tenant.
+         * The app's account service. In debug builds made with -Pauth.fakeUrl, the local fake Auth0
+         * (e2e/backend/fake-auth0). Otherwise, per -Pauth.mode: "website" (the default for now) signs
+         * in to openbenches.org itself, as its add page does; "auth0" uses the app's own Auth0 client,
+         * which the live site doesn't accept yet.
          */
         fun get(context: Context): AccountService = instance ?: synchronized(this) {
             instance ?: run {
                 val app = context.applicationContext
-                if (BuildConfig.FAKE_AUTH_URL.isNotEmpty()) FakeAccountService(app, BuildConfig.FAKE_AUTH_URL)
-                else Auth0AccountService(app)
+                when {
+                    BuildConfig.FAKE_AUTH_URL.isNotEmpty() -> FakeAccountService(app, BuildConfig.FAKE_AUTH_URL)
+                    BuildConfig.SIGN_IN_MODE == "auth0" -> Auth0AccountService(app)
+                    else -> WebsiteAccountService(app)
+                }
             }.also { instance = it }
         }
     }

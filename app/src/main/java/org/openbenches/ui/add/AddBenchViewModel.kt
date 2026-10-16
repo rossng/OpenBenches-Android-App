@@ -321,7 +321,8 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
         submitError = null
         viewModelScope.launch {
             try {
-                val idToken = AccountService.get(app).idToken()
+                val accounts = AccountService.get(app)
+                val headers = accounts.uploadHeaders()
                 addedBenchId = uploadBench(
                     NewBench(
                         inscription = inscription.trim(),
@@ -330,7 +331,8 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
                         tags = selectedTags.toList(),
                         photos = photos.map { UploadPhoto(it.file, it.mediaType) },
                     ),
-                    idToken = idToken,
+                    headers = headers,
+                    path = accounts.uploadPath,
                     onProgress = { progress = it },
                 )
                 // Uploaded: the draft and its photos are no longer needed.

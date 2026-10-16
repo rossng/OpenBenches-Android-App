@@ -38,6 +38,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Temporary: signing in to openbenches.org itself (see WebsiteAccountService). -->
+        <activity
+            android:name=".ui.WebsiteSignInActivity"
+            android:exported="false"
+            android:label="Sign in to OpenBenches" />
     </application>
 
 </manifest>

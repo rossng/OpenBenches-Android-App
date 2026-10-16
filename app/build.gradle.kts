@@ -34,6 +34,10 @@ android {
         buildConfigField("String", "OPENBENCHES_BASE_URL", "\"$openbenchesBaseUrl\"")
         // Release builds always use the real Auth0; see the debug build type.
         buildConfigField("String", "FAKE_AUTH_URL", "\"\"")
+        // How to sign in: "website" (sign in to openbenches.org and upload with its session, as its
+        // add page does) until the live site accepts the app's Auth0 tokens, then "auth0".
+        val signInMode = (project.findProperty("auth.mode") as String?) ?: "website"
+        buildConfigField("String", "SIGN_IN_MODE", "\"$signInMode\"")
     }
 
     buildTypes {
