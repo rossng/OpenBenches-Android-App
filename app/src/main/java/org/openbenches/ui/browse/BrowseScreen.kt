@@ -13,6 +13,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
+import org.openbenches.ui.add.AddBenchViewModel
+import org.openbenches.ui.add.AddBenchScreen
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -170,9 +178,12 @@ fun BrowseScreen(vm: BrowseViewModel = viewModel()) {
     }
 
     var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var adding by rememberSaveable { mutableStateOf(false) }
+    var addSession by rememberSaveable { mutableStateOf(0) }
+    val snackbar = remember { SnackbarHostState() }
     var viewerIndex by rememberSaveable { mutableStateOf<Int?>(null) }
 
-    BackHandler(enabled = selected != null && !searchOpen) {
+    BackHandler(enabled = selected != null && !searchOpen && !adding) {
         if (sheetState.currentValue == SheetValue.Expanded) scope.launch { sheetState.partialExpand() } else vm.clearSelection()
     }
 
@@ -210,6 +221,7 @@ fun BrowseScreen(vm: BrowseViewModel = viewModel()) {
                         bench = bench,
                         stack = vm.selection,
                         details = details,
+                        deviceAddress = vm.deviceAddresses[bench.id],
                         distance = userLocation?.let { formatDistance(distanceMeters(it.first, it.second, bench.lat, bench.lng)) },
                         actions = BenchSheetActions(
                             onClose = { vm.clearSelection() },
@@ -253,6 +265,11 @@ fun BrowseScreen(vm: BrowseViewModel = viewModel()) {
                         .clickable { openUrl(context, "https://www.openstreetmap.org/copyright") }
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 )
+                Column(
+                    Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = fabBottom),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                 FloatingActionButton(
                     onClick = {
                         if (!hasLocation) {
@@ -272,9 +289,29 @@ fun BrowseScreen(vm: BrowseViewModel = viewModel()) {
                     containerColor = SoftWhite,
                     contentColor = SoftBlack,
                     shape = CircleShape,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = fabBottom)
-                        .border(PanelBorder, BorderBlack, CircleShape),
+                    modifier = Modifier.border(PanelBorder, BorderBlack, CircleShape),
                 ) { Icon(Icons.Filled.MyLocation, contentDescription = "Show my location") }
+                // The website's gold "Add bench" button, as the map's main action.
+                AnimatedVisibility(visible = selected == null) {
+                    ExtendedFloatingActionButton(
+                        onClick = {
+                            addSession++
+                            adding = true
+                            // Seed the new bench's pin with a fresh location if we have one.
+                            scope.launch {
+                                (mapController.myLocation()?.let { it.latitude to it.longitude } ?: lastKnownLocation(context))
+                                    ?.let { userLocation = it }
+                            }
+                        },
+                        icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                        text = { Text("Add bench", style = MaterialTheme.typography.titleMedium) },
+                        containerColor = PlaqueGold,
+                        contentColor = SoftBlack,
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.border(PanelBorder, BorderBlack, MaterialTheme.shapes.small).testTag("addBenchButton"),
+                    )
+                }
+                }
             }
         }
 
@@ -292,6 +329,24 @@ fun BrowseScreen(vm: BrowseViewModel = viewModel()) {
             onRetry = { vm.loadBenches() },
             modifier = Modifier.align(Alignment.TopCenter),
         )
+
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = navBarBottom + 96.dp))
+
+        AnimatedVisibility(visible = adding, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
+            // A fresh form each time the button is pressed, kept across rotation and the camera app.
+            val addVm: AddBenchViewModel = viewModel(key = "add-bench-$addSession")
+            AddBenchScreen(
+                vm = addVm,
+                deviceLocation = userLocation,
+                onClose = { adding = false },
+                onAdded = { bench ->
+                    adding = false
+                    vm.addUploadedBench(bench)
+                    showBench(bench, zoom = 18.0)
+                    scope.launch { snackbar.showSnackbar("Bench added. Thank you!") }
+                },
+            )
+        }
 
         AnimatedVisibility(visible = searchOpen, enter = fadeIn(), exit = fadeOut()) {
             SearchScreen(

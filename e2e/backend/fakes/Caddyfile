@@ -1,0 +1,13 @@
+# Stand-ins for third-party APIs that the website calls, so the local stack needs no external accounts.
+:80 {
+	# Stadia Maps reverse geocoding, called when a bench is added (LocationFunctions::getAddress).
+	# The website builds the address "Fixture Park, Testville, Testshire, England, United Kingdom" from this.
+	handle /geocoding/v2/reverse {
+		header Content-Type application/json
+		respond `{"features":[{"properties":{"layer":"poi","name":"Fixture Park","context":{"whosonfirst":{"locality":{"name":"Testville"},"county":{"name":"Testshire"},"region":{"name":"England"},"country":{"name":"United Kingdom"}}}}}]}` 200
+	}
+	handle /health {
+		respond "ok" 200
+	}
+	respond "No fake for {method} {uri}" 404
+}

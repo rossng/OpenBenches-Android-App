@@ -102,7 +102,20 @@ interface OpenBenchesService {
     @Headers("Accept: application/json")
     @GET("search")
     suspend fun searchBenches(@Query("search") search: String): BenchesRawResponse
+
+    @Headers("Accept: application/json")
+    @GET("tags/")
+    suspend fun getTags(): List<Tag>
 }
+
+/** A folksonomy tag, e.g. "dog" or "beach". The website only lets people pick from these. */
+data class Tag(
+    @SerializedName("id") val id: Int,
+    @SerializedName("text") val text: String,
+)
+
+/** Every tag a bench can be given. */
+suspend fun fetchTags(): List<Tag> = openBenchesService.getTags()
 
 data class BenchesRawResponse(
     @SerializedName("features") val features: List<BenchRaw>

@@ -7,6 +7,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -83,5 +84,10 @@ class LocalBackendApiTest {
     @Test
     fun benchDetails_includeTheStoredAddress() = runBlocking {
         assertEquals(Fixtures.ADDRESS, fetchBenchDetails(Fixtures.BENCH_ID).features!!.single().properties!!.address)
+    }
+
+    @Test
+    fun benchDetails_omitAddressWhenNoneIsStored() = runBlocking {
+        assertNull(fetchBenchDetails(Fixtures.NO_ADDRESS_BENCH_ID).features!!.single().properties!!.address)
     }
 }

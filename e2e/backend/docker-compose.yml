@@ -29,10 +29,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      fakes:
+        condition: service_healthy
     ports:
       - "8000:80"
     volumes:
       - ./.openbenches-src/dev/env.local:/var/www/openbenches/.env.local:ro
+      - ./env.dev.local:/var/www/openbenches/.env.dev.local:ro
       - ./.openbenches-src/dev/symfony/framework.yaml:/var/www/openbenches/config/packages/framework.yaml:ro
       - ./.openbenches-src/dev/symfony/twig.yaml:/var/www/openbenches/config/packages/twig.yaml:ro
       - ./.openbenches-src/dev/symfony/doctrine.yaml:/var/www/openbenches/config/packages/doctrine.yaml:ro
@@ -41,6 +44,16 @@ services:
       test: ["CMD", "curl", "-fsS", "http://localhost/api/bench/900001"]
       interval: 5s
       timeout: 10s
+      retries: 30
+
+  fakes:
+    image: caddy:2.10.2-alpine
+    volumes:
+      - ./fakes/Caddyfile:/etc/caddy/Caddyfile:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 5s
+      timeout: 5s
       retries: 30
 
 volumes:

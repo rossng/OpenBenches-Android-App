@@ -39,8 +39,11 @@ emulator -avd openbenches_e2e &   # add -no-window to run headless
   the website into `e2e/backend/.openbenches-src` at a pinned commit of
   [rossng/openbenches.org@docker-local-dev](https://github.com/rossng/openbenches.org/tree/docker-local-dev),
   which adds the Docker setup (`dev/`). Override `OPENBENCHES_REPO` / `OPENBENCHES_REF` to test another commit.
-- **db**: MariaDB seeded with the website's sample database plus `fixtures.sql` (bench 900001 at 0.5,0.5,
-  with a photo in `photos/`). `./up.sh --reset` wipes and re-seeds it.
+- **db**: MariaDB seeded with the website's sample database plus `fixtures.sql` (bench 900001 at 0.5,0.5
+  with a photo in `photos/`, and 900002 with no stored address). `./up.sh --reset` wipes and re-seeds it.
+- **fakes**: a stand-in for the Stadia Maps geocoder the website calls when a bench is added
+  (`fakes/Caddyfile`, wired up through `env.dev.local`). Every new bench gets the address
+  "Fixture Park, Testville, Testshire, England, United Kingdom".
 
 The sample database has no photos. `./fetch-photos.sh LAT LNG` downloads the real ones (CC BY-SA) from
 openbenches.org for benches near a location, e.g. `./fetch-photos.sh 51.3811 -2.3590` for Bath. They're gitignored.
@@ -56,7 +59,7 @@ openbenches.org for benches near a location, e.g. `./fetch-photos.sh 51.3811 -2.
 
 ## Not covered yet
 
-- Login and upload: the app source in this repo has no Auth0 or upload code yet, though `app/build.gradle.kts`
-  already configures Auth0. Testing those will need local fakes for Auth0 (OIDC + JWKS) and the StadiaMaps
-  geocoder, since the server calls both when a bench is added.
+- Signing in: benches are added anonymously. The upload code can send an Auth0 ID token, but there's no
+  sign-in flow yet, and testing it will need a local fake for Auth0 (OIDC + JWKS).
+- Benches added during tests stay in the database until `./up.sh --reset`.
 - Map tiles (OpenStreetMap) and the About/Privacy WebViews still load from the internet.

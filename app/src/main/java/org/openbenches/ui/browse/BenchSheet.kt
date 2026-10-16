@@ -65,6 +65,7 @@ import org.openbenches.ui.theme.SkyBlue
 import org.openbenches.ui.theme.SoftBlack
 import org.openbenches.ui.theme.SoftWhite
 import org.openbenches.ui.theme.Texture
+import org.openbenches.ui.theme.RoundIconButton
 import org.openbenches.ui.theme.panel
 import org.openbenches.ui.theme.textured
 import java.time.OffsetDateTime
@@ -91,6 +92,7 @@ fun BenchSheet(
     bench: Bench,
     stack: List<Bench>,
     details: DetailsState?,
+    deviceAddress: String?,
     distance: String?,
     actions: BenchSheetActions,
     modifier: Modifier = Modifier,
@@ -98,7 +100,8 @@ fun BenchSheet(
     val feature = (details as? DetailsState.Loaded)?.feature
     val inscription = feature?.properties?.popupContent?.let(::cleanInscription) ?: bench.popupContent
     val photos = feature?.properties?.media.orEmpty().filter { it.url.startsWith("/image/") }
-    val address = feature?.properties?.address
+    // The website's stored address, or failing that a coarser one from the device's geocoder.
+    val address = feature?.properties?.address?.takeIf { it.isNotBlank() } ?: deviceAddress?.let { "Near $it" }
 
     Column(
         modifier
@@ -123,11 +126,10 @@ fun BenchSheet(
                 modifier = Modifier.align(Alignment.BottomStart).panel(GroundBrown, Texture.Paper, RoundedCornerShape(50), 1.dp)
                     .padding(horizontal = 10.dp, vertical = 3.dp),
             )
-            IconButton(
-                onClick = actions.onClose,
-                modifier = Modifier.align(Alignment.CenterEnd).padding(top = 6.dp).size(36.dp)
-                    .panel(SoftWhite, Texture.Paper, RoundedCornerShape(50), 2.dp),
-            ) { Icon(Icons.Filled.Close, contentDescription = "Close", modifier = Modifier.size(20.dp)) }
+            RoundIconButton(
+                Icons.Filled.Close, "Close", onClick = actions.onClose,
+                size = 36.dp, modifier = Modifier.align(Alignment.CenterEnd).padding(top = 6.dp),
+            )
         }
 
         if (stack.size > 1) StackPicker(bench, stack, actions.onPickFromStack)

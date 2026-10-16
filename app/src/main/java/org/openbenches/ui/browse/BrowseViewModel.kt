@@ -4,7 +4,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -12,6 +13,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.openbenches.data.Bench
 import org.openbenches.data.BenchDetailsFeature
+import org.openbenches.data.deviceAddress
 import org.openbenches.data.fetchBenchDetails
 import org.openbenches.data.fetchBenches
 import org.openbenches.data.fetchBenchesBySearch
@@ -25,7 +27,7 @@ sealed interface DetailsState {
 data class Camera(val latitude: Double, val longitude: Double, val zoom: Double)
 
 /** State for the map + bench sheet + search, kept across configuration changes. */
-class BrowseViewModel : ViewModel() {
+class BrowseViewModel(application: Application) : AndroidViewModel(application) {
     /** Every bench, as the website's map loads them (GET /api/benches), for clustering on the device. */
     var benches by mutableStateOf<List<Bench>>(emptyList())
         private set
@@ -40,6 +42,12 @@ class BrowseViewModel : ViewModel() {
     val selected: Bench? get() = selection.firstOrNull()
 
     val details = mutableStateMapOf<Int, DetailsState>()
+
+    /**
+     * Place names from the device's geocoder, for benches whose details came back without an
+     * address (servers that predate the API's address field, or benches never geocoded).
+     */
+    val deviceAddresses = mutableStateMapOf<Int, String>()
 
     var query by mutableStateOf("")
         private set
@@ -101,6 +109,7 @@ class BrowseViewModel : ViewModel() {
             viewModelScope.launch {
                 details[bench.id] = try {
                     val feature = fetchBenchDetails(bench.id).features?.firstOrNull()
+                    if (feature != null && feature.properties?.address.isNullOrBlank()) lookUpAddressOnDevice(bench)
                     if (feature != null) DetailsState.Loaded(feature) else DetailsState.Failed("Bench not found")
                 } catch (e: CancellationException) {
                     throw e
@@ -109,6 +118,18 @@ class BrowseViewModel : ViewModel() {
                 }
             }
         }
+    }
+
+    private fun lookUpAddressOnDevice(bench: Bench) {
+        if (bench.id in deviceAddresses) return
+        viewModelScope.launch {
+            deviceAddress(getApplication(), bench.lat, bench.lng)?.let { deviceAddresses[bench.id] = it }
+        }
+    }
+
+    /** Adds a bench the user has just uploaded, so it shows before the server's bench list cache expires. */
+    fun addUploadedBench(bench: Bench) {
+        benches = listOf(bench) + benches.filter { it.id != bench.id }
     }
 
     /** Searches inscriptions as the user types, after a short pause. */

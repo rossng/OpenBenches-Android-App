@@ -13,6 +13,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -49,6 +52,24 @@ class BrowseE2ETest {
         compose.waitUntilAtLeastOneExists(hasTestTag("photos"), timeoutMillis = 20_000)
         compose.onNodeWithContentDescription("Bench photo: Inscription").assertExists()
         compose.waitUntilAtLeastOneExists(hasText(Fixtures.ADDRESS), timeoutMillis = 20_000)
+    }
+
+    @Test
+    fun aBenchWithoutAStoredAddressStillOpens() {
+        compose.onNodeWithTag("searchBar").performClick()
+        compose.onNodeWithTag("searchField").performTextInput(Fixtures.NO_ADDRESS_MARKER)
+        compose.waitUntilAtLeastOneExists(hasTestTag("searchResult"), timeoutMillis = 20_000)
+
+        compose.onAllNodesWithTag("searchResult")[0].performClick()
+
+        compose.waitUntilAtLeastOneExists(hasTestTag("benchSheet"), timeoutMillis = 10_000)
+        compose.onNodeWithTag("inscription").assertTextContains(Fixtures.NO_ADDRESS_MARKER, substring = true)
+        // With no stored address the line either comes from the device's geocoder ("Near …") or is left out.
+        compose.waitForIdle()
+        val addressNodes = compose.onAllNodesWithTag("address").fetchSemanticsNodes()
+        assertTrue(addressNodes.all { node ->
+            node.config.getOrNull(SemanticsProperties.Text)?.joinToString().orEmpty().startsWith("Near ")
+        })
     }
 
     @Test

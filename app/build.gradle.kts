@@ -117,4 +117,7 @@ dependencies {
 
     // On-device OCR for auto-filling inscription from photos
     implementation("com.google.mlkit:text-recognition:16.0.1")
+
+    // Reading and writing photo locations (EXIF) for uploads
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 }

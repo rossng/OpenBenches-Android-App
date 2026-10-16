@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 # Pinned commit of the website, from the docker-local-dev branch of a fork that adds its
 # Docker setup (dev/). Upstream: https://github.com/openbenches/openbenches.org
 OPENBENCHES_REPO="${OPENBENCHES_REPO:-https://github.com/rossng/openbenches.org.git}"
-OPENBENCHES_REF="${OPENBENCHES_REF:-4c5b712611395b7477c911522e231132acb0099c}"
+OPENBENCHES_REF="${OPENBENCHES_REF:-ade3f3b3a41834ab87470ed88b219d132a63e03d}"
 SRC=.openbenches-src
 
 if [ ! -d "$SRC/.git" ]; then

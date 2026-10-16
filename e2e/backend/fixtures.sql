@@ -11,3 +11,10 @@ INSERT INTO `benches` (`benchID`, `latitude`, `longitude`, `address`, `inscripti
 -- The photo lives at e2e/backend/photos/9/0/<sha1>.jpg.
 INSERT INTO `media` (`mediaID`, `benchID`, `userID`, `sha1`, `importURL`, `licence`, `media_type`, `width`, `height`, `datetime`, `make`, `model`) VALUES
 (900001, 900001, 900001, '909e8e481c851f1dc14742d61f690243d8f701a7', NULL, 'CC BY-SA 4.0', 'inscription', 490, 319, NULL, NULL, NULL);
+
+-- A bench with no stored address (stored as empty, like the 65 in the sample data), so the API omits it.
+INSERT INTO `benches` (`benchID`, `latitude`, `longitude`, `address`, `inscription`, `description`, `present`, `published`, `added`, `userID`, `osmID`) VALUES
+(900002, 0.600000, 0.600000, '', 'E2E NO ADDRESS BENCH\nIn memory of Quince Marmalade', '', 1, 1, '2026-01-02 12:00:00', 900001, NULL);
+-- Search only finds benches with a photo, so give it the same one.
+INSERT INTO `media` (`mediaID`, `benchID`, `userID`, `sha1`, `importURL`, `licence`, `media_type`, `width`, `height`, `datetime`, `make`, `model`) VALUES
+(900002, 900002, 900001, '909e8e481c851f1dc14742d61f690243d8f701a7', NULL, 'CC BY-SA 4.0', 'inscription', 490, 319, NULL, NULL, NULL);

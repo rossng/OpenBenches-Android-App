@@ -4,6 +4,16 @@ import android.graphics.BitmapFactory
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -63,3 +73,29 @@ fun Modifier.panel(
 ): Modifier = this
     .border(borderWidth, BorderBlack, shape)
     .textured(color, texture, shape)
+
+/**
+ * A small round paper button with the website's border. The visible circle is [size], but it
+ * keeps a 48dp touch target, without the grey surround IconButton draws when made smaller.
+ */
+@Composable
+fun RoundIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: Dp = 36.dp,
+) {
+    Box(
+        modifier
+            .size(maxOf(size, 48.dp))
+            .clip(CircleShape)
+            .clickable(onClickLabel = contentDescription, role = Role.Button, onClick = onClick)
+            .semantics { this.contentDescription = contentDescription },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size(size).panel(SoftWhite, Texture.Paper, CircleShape, 2.dp), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = null, tint = SoftBlack, modifier = Modifier.size(size * 0.55f))
+        }
+    }
+}
