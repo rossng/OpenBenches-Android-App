@@ -13,6 +13,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
+import org.openbenches.ui.add.CaptureScreen
+import org.openbenches.ui.add.DraftsSheet
+import org.openbenches.data.DraftStore
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.runtime.collectAsState
 import org.openbenches.ui.add.AddBenchViewModel
 import org.openbenches.ui.add.AddBenchScreen
 import androidx.compose.material.icons.filled.Add
@@ -178,8 +183,19 @@ fun BrowseScreen(vm: BrowseViewModel = viewModel()) {
     }
 
     var searchOpen by rememberSaveable { mutableStateOf(false) }
-    var adding by rememberSaveable { mutableStateOf(false) }
+    // Adding a bench: "camera" (in-app camera) or "form" (check and upload), or null when not adding.
+    var addStage by rememberSaveable { mutableStateOf<String?>(null) }
     var addSession by rememberSaveable { mutableStateOf(0) }
+    var addDraftId by rememberSaveable { mutableStateOf<String?>(null) }
+    var savedThisOuting by rememberSaveable { mutableStateOf(0) }
+    var draftsOpen by rememberSaveable { mutableStateOf(false) }
+    val drafts by remember { DraftStore.get(context) }.drafts.collectAsState()
+    val adding = addStage != null
+    fun startAdding(draftId: String?, stage: String) {
+        addDraftId = draftId
+        addSession++
+        addStage = stage
+    }
     val snackbar = remember { SnackbarHostState() }
     var viewerIndex by rememberSaveable { mutableStateOf<Int?>(null) }
 
@@ -294,7 +310,7 @@ fun BrowseScreen(vm: BrowseViewModel = viewModel()) {
                 // The website's gold "Add bench" button, as the map's main action.
                 AnimatedVisibility(visible = selected == null) {
                     ExtendedFloatingActionButton(
-                        onClick = { addSession++; adding = true },
+                        onClick = { savedThisOuting = 0; startAdding(null, "camera") },
                         icon = { Icon(Icons.Filled.Add, contentDescription = null) },
                         text = { Text("Add bench", style = MaterialTheme.typography.titleMedium) },
                         containerColor = PlaqueGold,
@@ -319,23 +335,59 @@ fun BrowseScreen(vm: BrowseViewModel = viewModel()) {
             loadError = vm.loadError,
             onOpen = { searchOpen = true },
             onRetry = { vm.loadBenches() },
+            draftCount = drafts.size,
+            onOpenDrafts = { draftsOpen = true },
             modifier = Modifier.align(Alignment.TopCenter),
         )
 
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = navBarBottom + 96.dp))
 
         AnimatedVisibility(visible = adding, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
-            // A fresh form each time the button is pressed, kept across rotation and the camera app.
+            // One view model per bench, kept across rotation; a draft is reopened by its id.
             val addVm: AddBenchViewModel = viewModel(key = "add-bench-$addSession")
-            AddBenchScreen(
-                vm = addVm,
-                onClose = { adding = false },
-                onAdded = { bench ->
-                    adding = false
-                    vm.addUploadedBench(bench)
-                    showBench(bench, zoom = 18.0)
-                    scope.launch { snackbar.showSnackbar("Bench added. Thank you!") }
-                },
+            remember(addVm) { addVm.start(addDraftId) }
+            fun closed(saved: Boolean) {
+                addStage = null
+                // An unsaved session leaves nothing behind (its view model lives until the activity ends).
+                if (!addVm.isSavedDraft) addVm.discard()
+                if (saved || savedThisOuting > 0) {
+                    val n = savedThisOuting + if (saved && savedThisOuting == 0) 1 else 0
+                    scope.launch { snackbar.showSnackbar(if (n == 1) "Saved. Finish it from “Benches to finish”." else "$n benches saved. Finish them from “Benches to finish”.") }
+                }
+            }
+            when (addStage) {
+                "camera" -> CaptureScreen(
+                    vm = addVm,
+                    savedThisOuting = savedThisOuting,
+                    onSaveAndNext = {
+                        if (addVm.saveDraft()) savedThisOuting++
+                        startAdding(null, "camera")
+                    },
+                    onFinishNow = { addStage = "form" },
+                    onChooseFiles = { addStage = "form" },
+                    onClose = { closed(addVm.isSavedDraft) },
+                )
+                else -> AddBenchScreen(
+                    vm = addVm,
+                    onTakePhoto = { addStage = "camera" },
+                    onClose = { saved -> closed(saved) },
+                    onAdded = { bench ->
+                        addStage = null
+                        vm.addUploadedBench(bench)
+                        showBench(bench, zoom = 18.0)
+                        scope.launch { snackbar.showSnackbar("Bench added. Thank you!") }
+                    },
+                )
+            }
+        }
+
+        if (draftsOpen) {
+            DraftsSheet(
+                drafts = drafts,
+                userLocation = userLocation,
+                onOpen = { draft -> draftsOpen = false; startAdding(draft.id, "form") },
+                onDelete = { draft -> DraftStore.get(context).delete(draft.id) },
+                onDismiss = { draftsOpen = false },
             )
         }
 
@@ -361,6 +413,8 @@ private fun SearchPill(
     loadError: String?,
     onOpen: () -> Unit,
     onRetry: () -> Unit,
+    draftCount: Int,
+    onOpenDrafts: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -401,6 +455,12 @@ private fun SearchPill(
             loading -> StatusChip { CircularProgressIndicator(Modifier.size(14.dp), color = SoftBlack, strokeWidth = 2.dp); Text("Loading benches…") }
             loadError != null -> StatusChip(Modifier.clickable(onClick = onRetry)) {
                 Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(16.dp)); Text("Couldn't load benches. Tap to retry")
+            }
+        }
+        if (draftCount > 0) {
+            StatusChip(Modifier.clickable(onClick = onOpenDrafts).testTag("draftsChip")) {
+                Icon(Icons.Filled.PhotoCamera, contentDescription = null, modifier = Modifier.size(16.dp))
+                Text(if (draftCount == 1) "1 bench to finish" else "$draftCount benches to finish")
             }
         }
     }

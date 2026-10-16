@@ -53,6 +53,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -120,7 +121,8 @@ import kotlin.math.abs
 @Composable
 fun AddBenchScreen(
     vm: AddBenchViewModel,
-    onClose: () -> Unit,
+    onTakePhoto: () -> Unit,
+    onClose: (savedForLater: Boolean) -> Unit,
     onAdded: (Bench) -> Unit,
 ) {
     LaunchedEffect(vm.addedBenchId) {
@@ -129,15 +131,21 @@ fun AddBenchScreen(
         onAdded(Bench(id, listOf(where.second, where.first), vm.inscription.trim()))
     }
 
-    var confirmDiscard by remember { mutableStateOf(false) }
-    val close = { if (vm.hasContent) confirmDiscard = true else onClose() }
+    var confirmClose by remember { mutableStateOf(false) }
+    val close = {
+        when {
+            // A draft keeps whatever was done to it, like an email draft.
+            vm.isSavedDraft -> { vm.saveDraft(); onClose(true) }
+            vm.photos.isNotEmpty() -> confirmClose = true
+            else -> onClose(false)
+        }
+    }
     BackHandler(enabled = !vm.submitting, onBack = close)
 
     // The system file chooser rather than the photo picker: the picker strips photos' location.
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         vm.addPhotos(uris.take(MAX_PHOTOS - vm.photos.size))
     }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved -> vm.onCameraResult(saved) }
 
     Column(Modifier.fillMaxSize().textured(SoftWhite, Texture.Wood, RectangleShape).testTag("addBench")) {
         Row(
@@ -147,7 +155,7 @@ fun AddBenchScreen(
             RoundIconButton(Icons.Filled.Close, "Close", onClick = close, size = 40.dp)
             Spacer(Modifier.width(12.dp))
             Text(
-                "Add a bench",
+                if (vm.isSavedDraft) "Finish this bench" else "Add a bench",
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.panel(SkyBlue, Texture.Paper, RoundedCornerShape(50), 2.dp).padding(horizontal = 16.dp, vertical = 6.dp),
             )
@@ -160,7 +168,7 @@ fun AddBenchScreen(
             StepLabel("1 · Photos")
             PhotosPanel(
                 vm = vm,
-                onTakePhoto = { camera.launch(vm.newCameraUri()) },
+                onTakePhoto = onTakePhoto,
                 onChoosePhotos = { gallery.launch(arrayOf("image/*")) },
             )
 
@@ -204,26 +212,43 @@ fun AddBenchScreen(
         ) {
             vm.submitError?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error) }
             vm.missing?.let { Text(it, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
-            Button(
-                onClick = { vm.submit() },
-                enabled = vm.missing == null && !vm.submitting,
-                modifier = Modifier.fillMaxWidth().height(52.dp).testTag("submitBench"),
-                shape = MaterialTheme.shapes.small,
-                colors = ButtonDefaults.buttonColors(containerColor = PlaqueGold, contentColor = SoftBlack),
-                border = BorderStroke(2.dp, BorderBlack),
-            ) { Text(if (vm.submitError != null) "Try again" else "Add bench", style = MaterialTheme.typography.titleMedium) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (vm.photos.isNotEmpty() && vm.addedBenchId == null) {
+                    OutlinedButton(
+                        onClick = { if (vm.saveDraft()) onClose(true) },
+                        enabled = !vm.submitting,
+                        modifier = Modifier.height(52.dp).testTag("saveForLater"),
+                        shape = MaterialTheme.shapes.small,
+                        colors = ButtonDefaults.outlinedButtonColors(containerColor = SoftWhite, contentColor = SoftBlack),
+                        border = BorderStroke(2.dp, BorderBlack),
+                    ) { Text("Save for later", style = MaterialTheme.typography.labelLarge) }
+                }
+                Button(
+                    onClick = { vm.submit() },
+                    enabled = vm.missing == null && !vm.submitting,
+                    modifier = Modifier.weight(1f).height(52.dp).testTag("submitBench"),
+                    shape = MaterialTheme.shapes.small,
+                    colors = ButtonDefaults.buttonColors(containerColor = PlaqueGold, contentColor = SoftBlack),
+                    border = BorderStroke(2.dp, BorderBlack),
+                ) { Text(if (vm.submitError != null) "Try again" else "Add bench", style = MaterialTheme.typography.titleMedium) }
+            }
         }
     }
 
     if (vm.submitting) UploadingDialog(vm.progress)
 
-    if (confirmDiscard) {
+    if (confirmClose) {
         AlertDialog(
-            onDismissRequest = { confirmDiscard = false },
-            title = { Text("Discard this bench?") },
-            text = { Text("Your photos and inscription won't be saved.") },
-            confirmButton = { TextButton(onClick = { confirmDiscard = false; onClose() }) { Text("Discard") } },
-            dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") } },
+            onDismissRequest = { confirmClose = false },
+            title = { Text("Keep this bench?") },
+            text = { Text("Save it to finish later, or discard its photos and inscription.") },
+            confirmButton = { TextButton(onClick = { confirmClose = false; vm.saveDraft(); onClose(true) }) { Text("Save for later") } },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { confirmClose = false; vm.discard(); onClose(false) }) { Text("Discard") }
+                    TextButton(onClick = { confirmClose = false }) { Text("Keep editing") }
+                }
+            },
         )
     }
 }

@@ -6,11 +6,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import org.openbenches.data.BenchDraft
+import org.openbenches.data.DraftPhotoRecord
+import org.openbenches.data.DraftStore
 import org.openbenches.data.NewBench
 import org.openbenches.data.Tag
 import org.openbenches.data.UploadException
@@ -37,12 +39,26 @@ val MEDIA_TYPES = listOf("inscription" to "Inscription", "bench" to "The bench",
 
 const val MAX_PHOTOS = 4
 
-/** State for adding one bench: photos, inscription, location and tags, then the upload. */
+private const val ONE_DAY_MS = 24L * 60 * 60 * 1000
+
+/**
+ * State for adding one bench: photos, inscription, location and tags, then the upload. Each
+ * session keeps its photos in its own draft folder, so it can be saved for later at any point
+ * and picked up again with [start].
+ */
 class AddBenchViewModel(application: Application) : AndroidViewModel(application) {
     private val app get() = getApplication<Application>()
-    private val workDir = File(app.cacheDir, "upload-${UUID.randomUUID()}")
-    private val cameraDir = File(app.cacheDir, "camera")
-    private var pendingCameraFile: File? = null
+    private val store = DraftStore.get(app)
+
+    /** The draft this session saves to (and, if [isSavedDraft], was loaded from). */
+    var draftId: String? = null
+        private set
+    private lateinit var workDir: File
+    private var createdAt = System.currentTimeMillis()
+
+    /** True once this session exists as a saved draft, so closing it should keep it. */
+    var isSavedDraft by mutableStateOf(false)
+        private set
 
     val photos = mutableStateListOf<DraftPhoto>()
     var preparingPhoto by mutableStateOf(false)
@@ -95,18 +111,45 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    /** A file for the camera app to write a new photo into. */
-    fun newCameraUri(): Uri {
-        cameraDir.mkdirs()
-        val file = File(cameraDir, "bench-${UUID.randomUUID()}.jpg")
-        pendingCameraFile = file
-        return FileProvider.getUriForFile(app, "${app.packageName}.fileprovider", file)
+    /** Starts a new bench, or picks up the saved draft [id]. Call once. */
+    fun start(id: String?) {
+        if (draftId != null) return
+        store.removeAbandoned(olderThanMs = ONE_DAY_MS)
+        val draft = id?.let(store::load)
+        if (draft == null) {
+            val (newId, dir) = store.newDraftDir()
+            draftId = newId
+            workDir = dir
+            return
+        }
+        draftId = draft.id
+        workDir = store.dirFor(draft.id)
+        createdAt = draft.createdAt
+        isSavedDraft = true
+        photos.addAll(draft.photos.map { p ->
+            val takenAt = if (p.latitude != null && p.longitude != null) p.latitude to p.longitude else null
+            DraftPhoto(p.fileName, File(workDir, p.fileName), p.mediaType, takenAt)
+        })
+        inscription = draft.inscription
+        selectedTags.addAll(draft.tags)
+        locationPhotoId = photos.firstOrNull()?.id
+        location = draft.location ?: photos.firstOrNull()?.takenAt
+        pinMoved = draft.pinMoved
+        // Drafts are saved straight from the camera, so read the inscription now.
+        if (inscription.isBlank()) photos.firstOrNull { it.mediaType == "inscription" }?.let(::readInscription)
     }
 
-    fun onCameraResult(saved: Boolean) {
-        val file = pendingCameraFile ?: return
-        pendingCameraFile = null
-        if (saved && file.length() > 0) addPhoto(Uri.fromFile(file)) else file.delete()
+    /** Where the in-app camera should write the next photo. */
+    fun newPhotoFile(): File = File(workDir, "photo-${UUID.randomUUID()}.jpg")
+
+    /**
+     * Adds a photo the in-app camera has just written to [file], geotagged at [takenAt]. Its type
+     * follows the website's order: inscription, then the bench, then the view.
+     */
+    fun addCapturedPhoto(file: File, takenAt: Pair<Double, Double>) {
+        if (photos.size >= MAX_PHOTOS) return
+        photos.add(DraftPhoto(file.name, file, MEDIA_TYPES.getOrNull(photos.size)?.first ?: "bench", takenAt))
+        updateLocationFromFirstPhoto()
     }
 
     fun addPhoto(uri: Uri) = addPhotos(listOf(uri))
@@ -141,7 +184,6 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
                     listOf(first) + prepared.filter { it !== first }
                 } else prepared
                 ordered.forEach { photo ->
-                    // Like the website's add page: the first photo is the inscription, then the bench, then the view.
                     photos.add(photo.copy(mediaType = MEDIA_TYPES.getOrNull(photos.size)?.first ?: "bench"))
                 }
                 updateLocationFromFirstPhoto()
@@ -195,7 +237,7 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
                 val text = readText(app, photo.file)
                 if (text.isBlank()) {
                     textNote = "No text found in the photo. Type the inscription instead."
-                } else {
+                } else if (inscription.isBlank() || textWasRead) {
                     inscription = text
                     lastReadText = text
                     textNote = "Read from your photo. Check it against the plaque."
@@ -228,6 +270,34 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
         if (!selectedTags.remove(tag)) selectedTags.add(tag)
     }
 
+    /** Keeps everything so far as a draft to finish later. Needs at least one photo. */
+    fun saveDraft(): Boolean {
+        val id = draftId ?: return false
+        if (photos.isEmpty()) return false
+        store.save(
+            BenchDraft(
+                id = id,
+                createdAt = createdAt,
+                updatedAt = System.currentTimeMillis(),
+                photos = photos.map { DraftPhotoRecord(it.file.name, it.mediaType, it.takenAt?.first, it.takenAt?.second) },
+                inscription = inscription,
+                tags = selectedTags.toList(),
+                latitude = location?.first,
+                longitude = location?.second,
+                pinMoved = pinMoved,
+            ),
+        )
+        isSavedDraft = true
+        return true
+    }
+
+    /** Throws the bench away, including a saved draft and its photos. */
+    fun discard() {
+        draftId?.let(store::delete)
+        isSavedDraft = false
+        photos.clear()
+    }
+
     fun submit(idToken: String? = null) {
         val where = location ?: return
         if (missing != null || submitting) return
@@ -247,6 +317,9 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
                     idToken = idToken,
                     onProgress = { progress = it },
                 )
+                // Uploaded: the draft and its photos are no longer needed.
+                draftId?.let(store::delete)
+                isSavedDraft = false
             } catch (e: CancellationException) {
                 throw e
             } catch (e: UploadException) {
@@ -262,6 +335,7 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
     }
 
     override fun onCleared() {
-        workDir.deleteRecursively()
+        // A session that was never saved leaves nothing behind.
+        if (!isSavedDraft && addedBenchId == null) draftId?.let(store::delete)
     }
 }

@@ -16,6 +16,7 @@ import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.openbenches.data.DraftStore
 import org.openbenches.data.NewBench
 import org.openbenches.data.UploadException
 import org.openbenches.data.UploadPhoto
@@ -53,7 +54,7 @@ class AddBenchE2ETest {
     @Test
     fun addingABenchStoresItsPhotosLocationAndTags() {
         val marker = "E2E ADDED ${UUID.randomUUID().toString().take(8)}"
-        val vm = instrumentation.runOnMainSyncReturning { AddBenchViewModel(app) }
+        val vm = newSession()
 
         instrumentation.runOnMainSync {
             vm.inscription = marker
@@ -85,7 +86,7 @@ class AddBenchE2ETest {
 
     @Test
     fun aFirstPhotoWithoutLocationIsRefused() {
-        val vm = instrumentation.runOnMainSyncReturning { AddBenchViewModel(app) }
+        val vm = newSession()
 
         instrumentation.runOnMainSync { vm.addPhotos(listOf(Uri.fromFile(photoWithoutLocation()))) }
         waitFor("the photo to be checked") { !vm.preparingPhoto && vm.photoError != null }
@@ -99,7 +100,7 @@ class AddBenchE2ETest {
 
     @Test
     fun aGeotaggedPhotoGoesFirstWhenPickedWithOthers() {
-        val vm = instrumentation.runOnMainSyncReturning { AddBenchViewModel(app) }
+        val vm = newSession()
         val geotagged = photoTakenAt(51.5, -0.1)
 
         instrumentation.runOnMainSync {
@@ -124,6 +125,43 @@ class AddBenchE2ETest {
         } catch (e: UploadException) {
             assertTrue(e.message, e.message!!.contains("location"))
         }
+    }
+
+    /** A new add-bench session, as the Add bench button starts one. */
+    private fun newSession(draftId: String? = null): AddBenchViewModel =
+        instrumentation.runOnMainSyncReturning { AddBenchViewModel(app).also { it.start(draftId) } }
+
+    @Test
+    fun aBenchSavedForLaterCanBeFinishedAndUploaded() {
+        // Out and about: photograph the bench and save it, without an inscription.
+        val outing = newSession()
+        instrumentation.runOnMainSync {
+            outing.addCapturedPhoto(photoTakenAt(51.3812, -2.3599).let { src -> outing.newPhotoFile().also { src.copyTo(it) } }, 51.3812 to -2.3599)
+            assertTrue(outing.saveDraft())
+        }
+        val draftId = outing.draftId!!
+        val store = DraftStore.get(app)
+        assertNotNull(store.load(draftId))
+
+        // Later, maybe after a restart: reopen the draft in a fresh session.
+        val later = newSession(draftId)
+        instrumentation.runOnMainSync {
+            assertTrue(later.isSavedDraft)
+            assertEquals(1, later.photos.size)
+            assertEquals(51.3812, later.location!!.first, 1e-5)
+        }
+        // Text recognition runs on the reopened draft; then the user writes the real inscription.
+        waitFor("text recognition") { !later.readingText }
+        val marker = "E2E DRAFT ${UUID.randomUUID().toString().take(8)}"
+        instrumentation.runOnMainSync {
+            later.inscription = marker
+            later.submit()
+        }
+        waitFor("the upload to finish", timeoutMs = 60_000) { later.addedBenchId != null || later.submitError != null }
+        assertNull(later.submitError)
+
+        assertEquals(marker, runBlocking { fetchBenchDetails(later.addedBenchId!!) }.features!!.single().properties!!.popupContent)
+        assertNull("uploaded drafts are removed", store.load(draftId))
     }
 
     private fun waitFor(what: String, timeoutMs: Long = 20_000, condition: () -> Boolean) {

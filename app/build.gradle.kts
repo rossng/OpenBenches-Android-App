@@ -120,4 +120,9 @@ dependencies {
 
     // Reading and writing photo locations (EXIF) for uploads
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+
+    // In-app camera for photographing benches
+    implementation("androidx.camera:camera-camera2:1.4.2")
+    implementation("androidx.camera:camera-lifecycle:1.4.2")
+    implementation("androidx.camera:camera-view:1.4.2")
 }

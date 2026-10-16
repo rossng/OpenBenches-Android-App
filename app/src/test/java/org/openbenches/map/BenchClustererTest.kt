@@ -61,6 +61,7 @@ class BenchClustererTest {
 
     @Test
     fun distancesAreHumanReadable() {
+        assertEquals("under 10 m", formatDistance(3.0))
         assertEquals("350 m", formatDistance(354.0))
         assertEquals("2.4 km", formatDistance(2_412.0))
         assertEquals(

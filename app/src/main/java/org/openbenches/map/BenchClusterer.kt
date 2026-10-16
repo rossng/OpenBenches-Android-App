@@ -101,8 +101,9 @@ fun distanceMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Doub
     return 2 * r * Math.atan2(sqrt(a), sqrt(1 - a))
 }
 
-/** "350 m" or "2.4 km". */
+/** "350 m" or "2.4 km" ("under 10 m" when it's this close). */
 fun formatDistance(meters: Double): String = when {
+    meters < 10 -> "under 10 m"
     meters < 1000 -> "${(meters / 10).toInt() * 10} m"
     meters < 100_000 -> String.format(java.util.Locale.UK, "%.1f km", meters / 1000)
     else -> "${(meters / 1000).toInt()} km"
