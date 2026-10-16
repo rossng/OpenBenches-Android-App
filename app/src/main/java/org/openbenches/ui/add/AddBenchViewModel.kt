@@ -10,7 +10,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import org.openbenches.data.AccountService
 import org.openbenches.data.BenchDraft
+import org.openbenches.data.SignInExpired
 import org.openbenches.data.DraftPhotoRecord
 import org.openbenches.data.DraftStore
 import org.openbenches.data.NewBench
@@ -298,7 +300,8 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
         photos.clear()
     }
 
-    fun submit(idToken: String? = null) {
+    /** Uploads the bench, credited to the signed-in account if there is one. */
+    fun submit() {
         val where = location ?: return
         if (missing != null || submitting) return
         submitting = true
@@ -306,6 +309,7 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
         submitError = null
         viewModelScope.launch {
             try {
+                val idToken = AccountService.get(app).idToken()
                 addedBenchId = uploadBench(
                     NewBench(
                         inscription = inscription.trim(),
@@ -322,6 +326,8 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
                 isSavedDraft = false
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: SignInExpired) {
+                submitError = "Your sign-in has expired. Sign in again, or sign out to add the bench anonymously."
             } catch (e: UploadException) {
                 submitError = e.message
             } catch (e: IOException) {

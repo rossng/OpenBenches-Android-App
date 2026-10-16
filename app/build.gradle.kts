@@ -32,9 +32,16 @@ android {
         buildConfigField("String", "AUTH0_CLIENT_ID", "\"$auth0ClientId\"")
         buildConfigField("String", "AUTH0_SCHEME", "\"$auth0Scheme\"")
         buildConfigField("String", "OPENBENCHES_BASE_URL", "\"$openbenchesBaseUrl\"")
+        // Release builds always use the real Auth0; see the debug build type.
+        buildConfigField("String", "FAKE_AUTH_URL", "\"\"")
     }
 
     buildTypes {
+        debug {
+            // Sign in against the local fake Auth0 (e2e/backend) instead: -Pauth.fakeUrl=http://10.0.2.2:8002/
+            val fakeAuthUrl = (project.findProperty("auth.fakeUrl") as String?) ?: ""
+            buildConfigField("String", "FAKE_AUTH_URL", "\"$fakeAuthUrl\"")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(

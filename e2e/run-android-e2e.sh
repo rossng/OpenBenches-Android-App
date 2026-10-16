@@ -14,4 +14,5 @@ fi
 # 10.0.2.2 is the development machine as seen from the Android emulator.
 ./gradlew connectedDebugAndroidTest \
   -Popenbenches.baseUrl=http://10.0.2.2:8000/ \
+  -Pauth.fakeUrl=http://10.0.2.2:8002/ \
   "$@"

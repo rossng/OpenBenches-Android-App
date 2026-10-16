@@ -31,6 +31,13 @@ services:
         condition: service_healthy
       fakes:
         condition: service_healthy
+      fake-auth0:
+        condition: service_healthy
+    # Trust the fake Auth0's certificate, so the site can fetch its keys from https://auth.openbenches.test/.
+    command: >-
+      sh -c "cp /fake-auth0-certs/ca.crt /usr/local/share/ca-certificates/fake-auth0.crt
+      && update-ca-certificates >/dev/null
+      && exec docker-php-entrypoint apache2-foreground"
     ports:
       - "8000:80"
     volumes:
@@ -40,6 +47,7 @@ services:
       - ./.openbenches-src/dev/symfony/twig.yaml:/var/www/openbenches/config/packages/twig.yaml:ro
       - ./.openbenches-src/dev/symfony/doctrine.yaml:/var/www/openbenches/config/packages/doctrine.yaml:ro
       - ./photos:/var/www/openbenches/public/photos
+      - auth-certs:/fake-auth0-certs:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost/api/bench/900001"]
       interval: 5s
@@ -56,5 +64,26 @@ services:
       timeout: 5s
       retries: 30
 
+  # Stands in for Auth0: signs ID tokens for test users; the site verifies them for real.
+  fake-auth0:
+    build: ./fake-auth0
+    # Auth0's SDK insists on a dotted domain; .test is reserved, so it can't clash with a real one.
+    networks:
+      default:
+        aliases: [auth.openbenches.test]
+    environment:
+      HOSTNAME_FOR_TLS: auth.openbenches.test
+      CLIENT_ID: local-e2e-android # AUTH0_ANDROID_CLIENT_ID in the site's env.local
+    ports:
+      - "8002:80"
+    volumes:
+      - auth-certs:/certs
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
 volumes:
   db-data:
+  auth-certs:

@@ -14,6 +14,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import org.openbenches.ui.add.CaptureScreen
+import org.openbenches.ui.label
+import org.openbenches.ui.rememberSignIn
+import androidx.compose.material.icons.filled.AccountCircle
 import org.openbenches.ui.add.DraftsSheet
 import org.openbenches.data.DraftStore
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -69,6 +72,7 @@ import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -422,6 +426,8 @@ private fun SearchPill(
 ) {
     val context = LocalContext.current
     var menuOpen by remember { mutableStateOf(false) }
+    // Held here, not in the menu: closing the menu would cancel a sign-in started from it.
+    val signIn = rememberSignIn()
     Column(modifier.statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(
             Modifier.fillMaxWidth().height(56.dp)
@@ -443,6 +449,30 @@ private fun SearchPill(
             Box {
                 IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    val account = signIn.account.value
+                    if (account == null) {
+                        DropdownMenuItem(
+                            text = { Text("Sign in", style = MaterialTheme.typography.labelLarge) },
+                            leadingIcon = { Icon(Icons.Filled.AccountCircle, contentDescription = null) },
+                            onClick = { menuOpen = false; signIn.signIn() },
+                        )
+                    } else {
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text("Signed in as", style = MaterialTheme.typography.labelSmall)
+                                    Text(account.label(), style = MaterialTheme.typography.bodyLarge)
+                                }
+                            },
+                            leadingIcon = { Icon(Icons.Filled.AccountCircle, contentDescription = null) },
+                            enabled = false,
+                            // Information, not an action: keep it readable rather than greyed out.
+                            colors = MenuDefaults.itemColors(disabledTextColor = SoftBlack, disabledLeadingIconColor = SoftBlack),
+                            onClick = {},
+                        )
+                        DropdownMenuItem(text = { Text("Sign out") }, onClick = { menuOpen = false; signIn.signOut() })
+                    }
+                    HorizontalDivider()
                     listOf(
                         "About OpenBenches" to "${WEBSITE}blog/about/",
                         "Leaderboard" to "${WEBSITE}leaderboard",

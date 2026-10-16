@@ -98,6 +98,8 @@ import org.openbenches.ui.theme.SkyBlue
 import org.openbenches.ui.theme.SoftBlack
 import org.openbenches.ui.theme.SoftWhite
 import org.openbenches.ui.theme.Texture
+import org.openbenches.ui.label
+import org.openbenches.ui.rememberSignIn
 import org.openbenches.ui.theme.RoundIconButton
 import org.openbenches.ui.theme.panel
 import org.openbenches.ui.theme.textured
@@ -197,12 +199,7 @@ fun AddBenchScreen(
                 }
             }
 
-            Text(
-                "Your photos will be published under CC BY-SA 4.0. You're adding this bench anonymously.",
-                style = MaterialTheme.typography.bodySmall,
-                color = SoftWhite,
-                modifier = Modifier.fillMaxWidth().panel(GroundBrown, Texture.Paper).padding(12.dp),
-            )
+            CreditPanel()
         }
 
         Column(
@@ -250,6 +247,38 @@ fun AddBenchScreen(
                 }
             },
         )
+    }
+}
+
+/** Who the bench will be credited to, with sign in/out, like the website's add page. */
+@Composable
+private fun CreditPanel() {
+    val signIn = rememberSignIn()
+    val account = signIn.account.value
+    Column(
+        Modifier.fillMaxWidth().panel(GroundBrown, Texture.Paper).padding(12.dp).testTag("creditPanel"),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            if (account != null) "This bench will be credited to ${account.label()}."
+            else "You're adding this bench anonymously. Sign in to have it credited to you.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = SoftWhite,
+        )
+        Text("Photos are published under CC BY-SA 4.0.", style = MaterialTheme.typography.bodySmall, color = SoftWhite)
+        if (account == null) {
+            Button(
+                onClick = signIn.signIn,
+                shape = MaterialTheme.shapes.small,
+                colors = ButtonDefaults.buttonColors(containerColor = PlaqueGold, contentColor = SoftBlack),
+                border = BorderStroke(2.dp, BorderBlack),
+                modifier = Modifier.testTag("signInToCredit"),
+            ) { Text("Sign in", style = MaterialTheme.typography.labelLarge) }
+        } else {
+            TextButton(onClick = signIn.signOut, contentPadding = PaddingValues(0.dp)) {
+                Text("Sign out and add anonymously", color = SoftWhite, style = MaterialTheme.typography.labelLarge)
+            }
+        }
     }
 }
 

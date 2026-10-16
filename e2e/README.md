@@ -41,6 +41,10 @@ emulator -avd openbenches_e2e &   # add -no-window to run headless
   which adds the Docker setup (`dev/`). Override `OPENBENCHES_REPO` / `OPENBENCHES_REF` to test another commit.
 - **db**: MariaDB seeded with the website's sample database plus `fixtures.sql` (bench 900001 at 0.5,0.5
   with a photo in `photos/`, and 900002 with no stored address). `./up.sh --reset` wipes and re-seeds it.
+- **fake-auth0**: a stand-in for Auth0 on <http://localhost:8002>, with three test users. It signs ID tokens
+  like Auth0 does and serves its keys at `https://auth.openbenches.test/.well-known/jwks.json` inside the
+  Docker network; the website (with `AUTH0_DOMAIN` pointed there in `env.dev.local`) fetches them and
+  verifies tokens with its normal code. It makes its own throwaway CA, which only the web container trusts.
 - **fakes**: a stand-in for the Stadia Maps geocoder the website calls when a bench is added
   (`fakes/Caddyfile`, wired up through `env.dev.local`). Every new bench gets the address
   "Fixture Park, Testville, Testshire, England, United Kingdom".
@@ -51,15 +55,17 @@ openbenches.org for benches near a location, e.g. `./fetch-photos.sh 51.3811 -2.
 ## Running the app by hand against the local backend
 
 ```sh
-./gradlew installDebug -Popenbenches.baseUrl=http://10.0.2.2:8000/
+./gradlew installDebug -Popenbenches.baseUrl=http://10.0.2.2:8000/ -Pauth.fakeUrl=http://10.0.2.2:8002/
 ```
 
-`10.0.2.2` is your Mac as seen from the emulator. Debug builds allow plain HTTP to it
+With `auth.fakeUrl` (debug builds only), "Sign in" offers the fake's test users instead of Auth0's login
+page. Release builds always use Auth0. `10.0.2.2` is your Mac as seen from the emulator. Debug builds allow plain HTTP to it
 (`app/src/debug/res/xml/network_security_config.xml`). Release builds don't.
 
 ## Not covered yet
 
-- Signing in: benches are added anonymously. The upload code can send an Auth0 ID token, but there's no
-  sign-in flow yet, and testing it will need a local fake for Auth0 (OIDC + JWKS).
+- Auth0's own login page and token exchange: the Auth0 SDK only talks HTTPS to a real domain, so tests swap
+  in a fake sign-in on the app side. Everything from the ID token onwards (refresh, upload, the server's
+  verification) is the real code.
 - Benches added during tests stay in the database until `./up.sh --reset`.
 - Map tiles (OpenStreetMap) and the About/Privacy WebViews still load from the internet.
