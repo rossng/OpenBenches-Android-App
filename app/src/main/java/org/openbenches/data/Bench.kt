@@ -1,6 +1,8 @@
 package org.openbenches.data
 
 import com.google.gson.annotations.SerializedName
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.openbenches.BuildConfig
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -139,14 +141,22 @@ data class Properties(
  * Turns an API inscription (HTML with <br /> tags and CRLFs) into plain text that keeps the
  * plaque's line breaks.
  */
-fun cleanInscription(html: String): String =
-    html.replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "")
-        .replace(Regex("<[^>]+>"), "")
-        .replace("\r\n", "\n")
-        .replace("&amp;", "&").replace("&quot;", "\"").replace("&#039;", "'").replace("&lt;", "<").replace("&gt;", ">")
-        .lines().joinToString("\n") { it.trim() }
-        .replace(Regex("\n{3,}"), "\n\n")
-        .trim()
+fun cleanInscription(html: String): String {
+    // Most inscriptions are plain text with <br /> line breaks; skip the work when there's nothing to do.
+    var text = if ('<' in html) html.replace(BR_TAG, "").replace(ANY_TAG, "") else html
+    if ('&' in text) text = text.replace("&amp;", "&").replace("&quot;", "\"").replace("&#039;", "'").replace("&lt;", "<").replace("&gt;", ">")
+    return text.replace("\r\n", "\n").lineSequence().joinToString("\n") { it.trim() }.replace(BLANK_LINES, "\n\n").trim()
+}
+
+// Compiled once: this runs for every one of the ~45,000 benches on each launch.
+private val BR_TAG = Regex("<br\\s*/?>", RegexOption.IGNORE_CASE)
+private val ANY_TAG = Regex("<[^>]+>")
+private val BLANK_LINES = Regex("\n{3,}")
+
+/** Turns API features into benches, off the main thread: the full list is tens of thousands. */
+private suspend fun toBenches(features: List<BenchRaw>): List<Bench> = withContext(Dispatchers.Default) {
+    features.map { Bench(id = it.id, coordinates = it.geometry.coordinates, popupContent = cleanInscription(it.properties.popupContent)) }
+}
 
 private val openBenchesService: OpenBenchesService by lazy {
     Retrofit.Builder()
@@ -166,13 +176,7 @@ fun mediaUrl(path: String): String = BuildConfig.OPENBENCHES_BASE_URL.trimEnd('/
  * @return List of benches
  */
 suspend fun fetchBenches(): List<Bench> {
-    return openBenchesService.getBenches().features.map {
-        Bench(
-            id = it.id,
-            coordinates = it.geometry.coordinates,
-            popupContent = cleanInscription(it.properties.popupContent)
-        )
-    }
+    return toBenches(openBenchesService.getBenches().features)
 }
 
 /**
@@ -180,13 +184,7 @@ suspend fun fetchBenches(): List<Bench> {
  * @return List of benches
  */
 suspend fun fetchBenchesNearby(latitude: Double, longitude: Double, distance: Int = 200): List<Bench> {
-    return openBenchesService.getBenchesNearby(latitude, longitude, distance).features.map {
-        Bench(
-            id = it.id,
-            coordinates = it.geometry.coordinates,
-            popupContent = cleanInscription(it.properties.popupContent)
-        )
-    }
+    return toBenches(openBenchesService.getBenchesNearby(latitude, longitude, distance).features)
 }
 
 /**
@@ -202,11 +200,5 @@ suspend fun fetchBenchDetails(id: Int): BenchDetailsResponse {
  * @return List of benches
  */
 suspend fun fetchBenchesBySearch(query: String): List<Bench> {
-    return openBenchesService.searchBenches(query).features.map {
-        Bench(
-            id = it.id,
-            coordinates = it.geometry.coordinates,
-            popupContent = cleanInscription(it.properties.popupContent)
-        )
-    }
+    return toBenches(openBenchesService.searchBenches(query).features)
 }
