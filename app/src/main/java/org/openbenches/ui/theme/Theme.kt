@@ -1,58 +1,54 @@
 package org.openbenches.ui.theme
 
-import android.app.Activity
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+// The website has a single light look, so the app does too rather than following dynamic colour.
+private val OpenBenchesColors = lightColorScheme(
+    primary = PlaqueGold,
+    onPrimary = SoftBlack,
+    primaryContainer = PlaqueGold,
+    onPrimaryContainer = SoftBlack,
+    secondary = SkyBlue,
+    onSecondary = SoftBlack,
+    secondaryContainer = SkyBlue,
+    onSecondaryContainer = SoftBlack,
+    tertiary = GrassGreen,
+    onTertiary = SoftWhite,
+    background = SoftWhite,
+    onBackground = SoftBlack,
+    surface = SoftWhite,
+    onSurface = SoftBlack,
+    surfaceVariant = Color(0xFFE2E6E8),
+    onSurfaceVariant = Color(0xFF3E4448),
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = SoftWhite,
+    surfaceContainer = SoftWhite,
+    surfaceContainerHigh = SoftWhite,
+    surfaceContainerHighest = Color(0xFFE6E6E6),
+    outline = BorderBlack,
+    outlineVariant = Color(0x33191E20),
+    error = Color(0xFFB3261E),
 )
 
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+private val OpenBenchesShapes = Shapes(
+    small = RoundedCornerShape(4.dp),   // .button: border-radius .2em
+    medium = RoundedCornerShape(16.dp), // --radius: 1rem
+    large = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(24.dp),
 )
 
 @Composable
-fun OpenBenchesTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
-    content: @Composable () -> Unit
-) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
+fun OpenBenchesTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = OpenBenchesColors,
         typography = Typography,
-        content = content
+        shapes = OpenBenchesShapes,
+        content = content,
     )
 }
