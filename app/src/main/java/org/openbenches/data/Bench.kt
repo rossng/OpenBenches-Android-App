@@ -120,6 +120,19 @@ data class Properties(
     @SerializedName("popupContent") val popupContent: String
 )
 
+/**
+ * Turns an API inscription (HTML with <br /> tags and CRLFs) into plain text that keeps the
+ * plaque's line breaks.
+ */
+fun cleanInscription(html: String): String =
+    html.replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "")
+        .replace(Regex("<[^>]+>"), "")
+        .replace("\r\n", "\n")
+        .replace("&amp;", "&").replace("&quot;", "\"").replace("&#039;", "'").replace("&lt;", "<").replace("&gt;", ">")
+        .lines().joinToString("\n") { it.trim() }
+        .replace(Regex("\n{3,}"), "\n\n")
+        .trim()
+
 private val openBenchesService: OpenBenchesService by lazy {
     Retrofit.Builder()
         .baseUrl(BuildConfig.OPENBENCHES_BASE_URL + "api/")
@@ -142,7 +155,7 @@ suspend fun fetchBenches(): List<Bench> {
         Bench(
             id = it.id,
             coordinates = it.geometry.coordinates,
-            popupContent = it.properties.popupContent.replace(Regex("<[^>]+>"), "")
+            popupContent = cleanInscription(it.properties.popupContent)
         )
     }
 }
@@ -156,7 +169,7 @@ suspend fun fetchBenchesNearby(latitude: Double, longitude: Double, distance: In
         Bench(
             id = it.id,
             coordinates = it.geometry.coordinates,
-            popupContent = it.properties.popupContent.replace(Regex("<[^>]+>"), "")
+            popupContent = cleanInscription(it.properties.popupContent)
         )
     }
 }
@@ -178,7 +191,7 @@ suspend fun fetchBenchesBySearch(query: String): List<Bench> {
         Bench(
             id = it.id,
             coordinates = it.geometry.coordinates,
-            popupContent = it.properties.popupContent.replace(Regex("<[^>]+>"), "")
+            popupContent = cleanInscription(it.properties.popupContent)
         )
     }
 } 
