@@ -355,7 +355,10 @@ fun BrowseScreen(vm: BrowseViewModel = viewModel()) {
                     scope.launch { snackbar.showSnackbar(if (n == 1) "Saved. Finish it from “Benches to finish”." else "$n benches saved. Finish them from “Benches to finish”.") }
                 }
             }
-            when (addStage) {
+            // Keep showing the last stage while the overlay animates away, rather than the form.
+            var shownStage by remember { mutableStateOf("camera") }
+            addStage?.let { shownStage = it }
+            when (shownStage) {
                 "camera" -> CaptureScreen(
                     vm = addVm,
                     savedThisOuting = savedThisOuting,
