@@ -335,7 +335,8 @@ fun BrowseScreen(vm: BrowseViewModel = viewModel()) {
 
         SearchPill(
             benchCount = vm.benches.size,
-            loading = vm.loadingBenches,
+            // Only while there's nothing to show; updating a cached list happens quietly.
+            loading = vm.loadingBenches && vm.benches.isEmpty(),
             loadError = vm.loadError,
             onOpen = { searchOpen = true },
             onRetry = { vm.loadBenches() },

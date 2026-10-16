@@ -81,8 +81,13 @@ data class BenchDetailsResponse(
  */
 interface OpenBenchesService {
     @Headers("Accept: application/json")
-    @GET("benches")
+    @GET("benches/")
     suspend fun getBenches(): BenchesRawResponse
+
+    /** The newest [count] benches, newest first. */
+    @Headers("Accept: application/json")
+    @GET("benches/")
+    suspend fun getLatestBenches(@Query("latest") count: Int): BenchesRawResponse
 
     @Headers("Accept: application/json")
     @GET("nearest/")
@@ -178,6 +183,9 @@ fun mediaUrl(path: String): String = BuildConfig.OPENBENCHES_BASE_URL.trimEnd('/
 suspend fun fetchBenches(): List<Bench> {
     return toBenches(openBenchesService.getBenches().features)
 }
+
+/** The newest [count] benches, to bring a cached list up to date. */
+suspend fun fetchLatestBenches(count: Int): List<Bench> = toBenches(openBenchesService.getLatestBenches(count).features)
 
 /**
  * Fetches benches near a given location from the OpenBenches API.

@@ -93,7 +93,7 @@ fun uploadErrorMessage(code: Int, body: String): String {
         code == 415 && plain.contains("location", ignoreCase = true) ->
             "The first photo has no location. Choose a photo taken with location turned on in your camera."
         code == 415 -> "The server didn't receive a photo. Try again."
-        code == 401 -> "Your sign-in has expired. Sign in again, then retry."
+        code == 401 -> "OpenBenches didn't accept your sign-in. Sign out to add the bench anonymously, or try signing in again."
         code == 403 -> plain.ifEmpty { "You can't add benches with this account." }
         code == 413 -> "The photos are too large to upload. Try fewer photos."
         code >= 500 -> "The OpenBenches server had a problem (error $code). Try again in a moment."

@@ -15,7 +15,15 @@ import org.openbenches.data.Bench
 import org.openbenches.data.BenchDetailsFeature
 import org.openbenches.data.deviceAddress
 import org.openbenches.data.fetchBenchDetails
+import org.openbenches.data.BenchCache
+import org.openbenches.data.CachedBenches
+import org.openbenches.data.DELTA_SIZE
+import org.openbenches.data.RefreshPlan
 import org.openbenches.data.fetchBenches
+import org.openbenches.data.fetchLatestBenches
+import org.openbenches.data.mergeLatest
+import org.openbenches.data.refreshPlan
+import java.io.File
 import org.openbenches.data.fetchBenchesBySearch
 
 sealed interface DetailsState {
@@ -28,6 +36,9 @@ data class Camera(val latitude: Double, val longitude: Double, val zoom: Double)
 
 /** State for the map + bench sheet + search, kept across configuration changes. */
 class BrowseViewModel(application: Application) : AndroidViewModel(application) {
+    // Declared first: init { loadBenches() } below reads it.
+    private val cache = BenchCache(File(application.filesDir, "benches.json"))
+
     /** Every bench, as the website's map loads them (GET /api/benches), for clustering on the device. */
     var benches by mutableStateOf<List<Bench>>(emptyList())
         private set
@@ -66,17 +77,35 @@ class BrowseViewModel(application: Application) : AndroidViewModel(application) 
         loadBenches()
     }
 
+    /**
+     * Shows the cached bench list straight away, then brings it up to date: the whole list at most
+     * once a day, otherwise just the newest benches (a few KB).
+     */
     fun loadBenches() {
         if (loadingBenches) return
         loadingBenches = true
         loadError = null
         viewModelScope.launch {
             try {
-                benches = fetchBenches()
+                val cached = cache.read()
+                if (cached != null && benches.isEmpty()) benches = cached.benches
+                val now = System.currentTimeMillis()
+                val merged = if (refreshPlan(cached, now) == RefreshPlan.Delta) {
+                    runCatching { mergeLatest(cached!!.benches, fetchLatestBenches(DELTA_SIZE)) }.getOrElse { cached!!.benches }
+                } else null
+                if (merged != null) {
+                    benches = merged
+                    if (merged !== cached!!.benches) cache.write(cached.copy(benches = merged))
+                } else {
+                    val all = fetchBenches()
+                    benches = all
+                    cache.write(CachedBenches(now, all))
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                loadError = e.message ?: "Couldn't load benches"
+                // With a cached list the map still works; only say so when there's nothing to show.
+                if (benches.isEmpty()) loadError = e.message ?: "Couldn't load benches"
             } finally {
                 loadingBenches = false
             }
@@ -130,6 +159,10 @@ class BrowseViewModel(application: Application) : AndroidViewModel(application) 
     /** Adds a bench the user has just uploaded, so it shows before the server's bench list cache expires. */
     fun addUploadedBench(bench: Bench) {
         benches = listOf(bench) + benches.filter { it.id != bench.id }
+        val list = benches
+        viewModelScope.launch {
+            cache.read()?.let { cache.write(it.copy(benches = list)) }
+        }
     }
 
     /** Searches inscriptions as the user types, after a short pause. */
