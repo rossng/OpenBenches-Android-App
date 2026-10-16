@@ -314,7 +314,7 @@ fun BrowseScreen(vm: BrowseViewModel = viewModel()) {
                 // The website's gold "Add bench" button, as the map's main action.
                 AnimatedVisibility(visible = selected == null) {
                     ExtendedFloatingActionButton(
-                        onClick = { savedThisOuting = 0; startAdding(null, "camera") },
+                        onClick = { savedThisOuting = 0; startAdding(null, "form") },
                         icon = { Icon(Icons.Filled.Add, contentDescription = null) },
                         text = { Text("Add bench", style = MaterialTheme.typography.titleMedium) },
                         containerColor = PlaqueGold,
@@ -370,9 +370,11 @@ fun BrowseScreen(vm: BrowseViewModel = viewModel()) {
                         if (addVm.saveDraft()) savedThisOuting++
                         startAdding(null, "camera")
                     },
-                    onFinishNow = { addStage = "form" },
-                    onChooseFiles = { addStage = "form" },
-                    onClose = { closed(addVm.isSavedDraft) },
+                    onDone = { addStage = "form" },
+                    onClose = {
+                        // Back to this bench's form, unless it's the empty one after "Next bench".
+                        if (addVm.photos.isEmpty() && savedThisOuting > 0) closed(false) else addStage = "form"
+                    },
                 )
                 else -> AddBenchScreen(
                     vm = addVm,

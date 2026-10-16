@@ -39,7 +39,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -103,8 +102,8 @@ private const val MAX_FIX_AGE_MS = 2 * 60 * 1000L
 
 /**
  * A camera for photographing benches in a row while out and about. Each photo is geotagged as
- * it's taken, like a camera app with location turned on. After the first photo the bench can be
- * saved for later (and the next one started) or finished straight away.
+ * it's taken, like a camera app with location turned on. After the first photo, "Next bench" saves
+ * this one for later and starts another; "Done" goes back to the form.
  *
  * @param savedThisOuting benches saved for later since the camera was opened, for the counter.
  */
@@ -113,8 +112,7 @@ fun CaptureScreen(
     vm: AddBenchViewModel,
     savedThisOuting: Int,
     onSaveAndNext: () -> Unit,
-    onFinishNow: () -> Unit,
-    onChooseFiles: () -> Unit,
+    onDone: () -> Unit,
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -133,13 +131,12 @@ fun CaptureScreen(
     }
 
     val fix = rememberLocationFix(enabled = hasLocation)
-    var confirmClose by remember { mutableStateOf(false) }
-    val close = { if (vm.photos.isNotEmpty()) confirmClose = true else onClose() }
-    BackHandler(onBack = close)
+    // Closing never loses photos: the caller goes back to the form if this bench has any.
+    BackHandler(onBack = onClose)
 
     Box(Modifier.fillMaxSize().background(Color.Black).testTag("capture")) {
         if (hasCamera) {
-            CameraWithControls(vm, fix, onSaveAndNext, onFinishNow, onChooseFiles)
+            CameraWithControls(vm, fix, onSaveAndNext, onDone)
         } else {
             Column(
                 Modifier.align(Alignment.Center).padding(32.dp),
@@ -148,7 +145,7 @@ fun CaptureScreen(
             ) {
                 Text("OpenBenches needs the camera to photograph benches.", color = SoftWhite, textAlign = TextAlign.Center)
                 GoldButton("Allow camera") { permissions.launch(arrayOf(Manifest.permission.CAMERA)) }
-                TextButton(onClick = onChooseFiles) { Text("Choose photos from files instead", color = SoftWhite) }
+                TextButton(onClick = onClose) { Text("Back", color = SoftWhite) }
             }
         }
 
@@ -156,7 +153,7 @@ fun CaptureScreen(
             Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RoundIconButton(Icons.Filled.Close, "Close camera", onClick = close, size = 40.dp)
+            RoundIconButton(Icons.Filled.Close, "Close camera", onClick = onClose, size = 40.dp)
             Spacer(Modifier.weight(1f))
             if (savedThisOuting > 0) {
                 Text(
@@ -173,20 +170,6 @@ fun CaptureScreen(
         }
     }
 
-    if (confirmClose) {
-        AlertDialog(
-            onDismissRequest = { confirmClose = false },
-            title = { Text("Keep these photos?") },
-            text = { Text("Save this bench to finish later, or discard its photos.") },
-            confirmButton = { TextButton(onClick = { confirmClose = false; vm.saveDraft(); onClose() }) { Text("Save for later") } },
-            dismissButton = {
-                Row {
-                    TextButton(onClick = { confirmClose = false; vm.discard(); onClose() }) { Text("Discard") }
-                    TextButton(onClick = { confirmClose = false }) { Text("Keep shooting") }
-                }
-            },
-        )
-    }
 }
 
 @Composable
@@ -194,8 +177,7 @@ private fun CameraWithControls(
     vm: AddBenchViewModel,
     fix: Location?,
     onSaveAndNext: () -> Unit,
-    onFinishNow: () -> Unit,
-    onChooseFiles: () -> Unit,
+    onDone: () -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -280,11 +262,9 @@ private fun CameraWithControls(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (vm.photos.isEmpty()) {
-                        RoundIconButton(Icons.Filled.FolderOpen, "Choose photos from files", onClick = onChooseFiles, size = 44.dp)
-                    } else {
-                        TextButton(onClick = onFinishNow, modifier = Modifier.testTag("finishNow")) {
-                            Text("Finish now", color = SoftWhite, style = MaterialTheme.typography.labelLarge)
+                    if (vm.photos.isNotEmpty()) {
+                        TextButton(onClick = onDone, modifier = Modifier.testTag("cameraDone")) {
+                            Text("Done", color = SoftWhite, style = MaterialTheme.typography.labelLarge)
                         }
                     }
                 }

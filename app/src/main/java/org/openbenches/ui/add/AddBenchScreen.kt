@@ -1,6 +1,9 @@
 package org.openbenches.ui.add
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import android.content.Context
 import android.view.MotionEvent
 import androidx.activity.compose.BackHandler
@@ -145,8 +148,21 @@ fun AddBenchScreen(
     BackHandler(enabled = !vm.submitting, onBack = close)
 
     // The system file chooser rather than the photo picker: the picker strips photos' location.
+    // Since Android 16 or so the chooser does too, unless the app may read photo locations.
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         vm.addPhotos(uris.take(MAX_PHOTOS - vm.photos.size))
+    }
+    val mediaLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        vm.mediaLocationDenied = !granted
+        gallery.launch(arrayOf("image/*"))
+    }
+    val context = LocalContext.current
+    val choosePhotos = {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_MEDIA_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            gallery.launch(arrayOf("image/*"))
+        } else {
+            mediaLocation.launch(Manifest.permission.ACCESS_MEDIA_LOCATION)
+        }
     }
 
     Column(Modifier.fillMaxSize().textured(SoftWhite, Texture.Wood, RectangleShape).testTag("addBench")) {
@@ -171,7 +187,7 @@ fun AddBenchScreen(
             PhotosPanel(
                 vm = vm,
                 onTakePhoto = onTakePhoto,
-                onChoosePhotos = { gallery.launch(arrayOf("image/*")) },
+                onChoosePhotos = choosePhotos,
             )
 
             StepLabel("2 · Inscription")
@@ -301,7 +317,7 @@ private fun PhotosPanel(vm: AddBenchViewModel, onTakePhoto: () -> Unit, onChoose
     ) {
         if (vm.photos.isEmpty()) {
             Text(
-                "Start with a geotagged photo of the inscription: one taken with location turned on in your camera. Up to $MAX_PHOTOS photos.",
+                "Start with the inscription. Photos taken here are geotagged automatically; chosen photos need their location. Up to $MAX_PHOTOS photos.",
                 style = MaterialTheme.typography.bodyMedium,
             )
         } else {

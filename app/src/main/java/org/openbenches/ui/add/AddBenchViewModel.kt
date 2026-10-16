@@ -68,6 +68,9 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
     var photoError by mutableStateOf<String?>(null)
         private set
 
+    /** The user refused to let the app read photos' locations, so chosen photos arrive without one. */
+    var mediaLocationDenied by mutableStateOf(false)
+
     var inscription by mutableStateOf("")
     var readingText by mutableStateOf(false)
         private set
@@ -150,8 +153,10 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
      */
     fun addCapturedPhoto(file: File, takenAt: Pair<Double, Double>) {
         if (photos.size >= MAX_PHOTOS) return
-        photos.add(DraftPhoto(file.name, file, MEDIA_TYPES.getOrNull(photos.size)?.first ?: "bench", takenAt))
+        val photo = DraftPhoto(file.name, file, MEDIA_TYPES.getOrNull(photos.size)?.first ?: "bench", takenAt)
+        photos.add(photo)
         updateLocationFromFirstPhoto()
+        if (photo.mediaType == "inscription" && inscription.isBlank()) readInscription(photo)
     }
 
     fun addPhoto(uri: Uri) = addPhotos(listOf(uri))
@@ -176,7 +181,9 @@ class AddBenchViewModel(application: Application) : AndroidViewModel(application
                     val first = prepared.firstOrNull { it.takenAt != null }
                     if (first == null) {
                         prepared.forEach { it.file.delete() }
-                        photoError = if (prepared.size == 1) {
+                        photoError = if (mediaLocationDenied) {
+                            "OpenBenches can't see where your photos were taken. Allow access to photo locations, or take the photos in the app."
+                        } else if (prepared.size == 1) {
                             "This photo has no location. OpenBenches needs a photo taken with location (geotagging) turned on in your camera."
                         } else {
                             "None of these photos has a location. OpenBenches needs a photo taken with location (geotagging) turned on in your camera."
