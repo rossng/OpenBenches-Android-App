@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,7 +75,10 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -101,6 +105,7 @@ import org.openbenches.ui.theme.SkyBlue
 import org.openbenches.ui.theme.SoftBlack
 import org.openbenches.ui.theme.SoftWhite
 import org.openbenches.ui.theme.Texture
+import org.openbenches.ui.browse.PhotoViewer
 import org.openbenches.ui.label
 import org.openbenches.ui.rememberSignIn
 import org.openbenches.ui.theme.RoundIconButton
@@ -136,6 +141,7 @@ fun AddBenchScreen(
         onAdded(Bench(id, listOf(where.second, where.first), vm.inscription.trim()))
     }
 
+    val focusManager = LocalFocusManager.current
     var confirmClose by remember { mutableStateOf(false) }
     val close = {
         when {
@@ -165,7 +171,11 @@ fun AddBenchScreen(
         }
     }
 
-    Column(Modifier.fillMaxSize().textured(SoftWhite, Texture.Wood, RectangleShape).testTag("addBench")) {
+    Column(
+        Modifier.fillMaxSize().textured(SoftWhite, Texture.Wood, RectangleShape).testTag("addBench")
+            // Tapping anywhere outside a text box closes the keyboard and its cursor.
+            .pointerInput(Unit) { detectTapGestures(onTap = { focusManager.clearFocus() }) },
+    ) {
         Row(
             Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -311,6 +321,10 @@ private fun StepLabel(text: String) {
 
 @Composable
 private fun PhotosPanel(vm: AddBenchViewModel, onTakePhoto: () -> Unit, onChoosePhotos: () -> Unit) {
+    var viewing by remember { mutableStateOf<Int?>(null) }
+    viewing?.let { index ->
+        if (index in vm.photos.indices) PhotoViewer(vm.photos.asViewerPhotos(), index, onDismiss = { viewing = null })
+    }
     Column(
         Modifier.fillMaxWidth().panel(SkyBlue, Texture.Paper).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -322,7 +336,9 @@ private fun PhotosPanel(vm: AddBenchViewModel, onTakePhoto: () -> Unit, onChoose
             )
         } else {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.testTag("draftPhotos")) {
-                items(vm.photos, key = { it.id }) { photo -> PhotoTile(photo, vm) }
+                items(vm.photos, key = { it.id }) { photo ->
+                    PhotoTile(photo, vm, onView = { viewing = vm.photos.indexOfFirst { it.id == photo.id } })
+                }
             }
         }
         if (vm.preparingPhoto) LinearProgressIndicator(Modifier.fillMaxWidth(), color = SoftBlack, trackColor = PlaqueGold)
@@ -348,7 +364,7 @@ private fun PhotosPanel(vm: AddBenchViewModel, onTakePhoto: () -> Unit, onChoose
 }
 
 @Composable
-private fun PhotoTile(photo: DraftPhoto, vm: AddBenchViewModel) {
+private fun PhotoTile(photo: DraftPhoto, vm: AddBenchViewModel, onView: () -> Unit) {
     val shape = RoundedCornerShape(12.dp)
     Column(Modifier.width(168.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Box {
@@ -357,6 +373,7 @@ private fun PhotoTile(photo: DraftPhoto, vm: AddBenchViewModel) {
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxWidth().height(126.dp).border(PanelBorder, BorderBlack, shape).clip(shape)
+                    .clickable(onClickLabel = "View larger", onClick = onView)
                     .semantics { contentDescription = "Photo: ${MEDIA_TYPES.first { it.first == photo.mediaType }.second}" },
             )
             RoundIconButton(

@@ -78,6 +78,7 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlinx.coroutines.launch
+import org.openbenches.ui.browse.PhotoViewer
 import org.openbenches.ui.theme.BorderBlack
 import org.openbenches.ui.theme.GroundBrown
 import org.openbenches.ui.theme.PlaqueGold
@@ -193,6 +194,10 @@ private fun CameraWithControls(
         onDispose { controller.unbind() }
     }
     var capturing by remember { mutableStateOf(false) }
+    var viewing by remember { mutableStateOf<Int?>(null) }
+    viewing?.let { index ->
+        if (index in vm.photos.indices) PhotoViewer(vm.photos.asViewerPhotos(), index, onDismiss = { viewing = null })
+    }
     var error by remember { mutableStateOf<String?>(null) }
     val flash = remember { Animatable(0f) }
 
@@ -244,7 +249,8 @@ private fun CameraWithControls(
                                 model = photo.file,
                                 contentDescription = MEDIA_TYPES.firstOrNull { it.first == photo.mediaType }?.second,
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)).border(2.dp, SoftWhite, RoundedCornerShape(8.dp)),
+                                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)).border(2.dp, SoftWhite, RoundedCornerShape(8.dp))
+                                    .clickable(onClickLabel = "View larger") { viewing = vm.photos.indexOfFirst { it.id == photo.id } },
                             )
                             Box(
                                 Modifier.align(Alignment.TopEnd).size(22.dp).clip(CircleShape).background(SoftBlack)

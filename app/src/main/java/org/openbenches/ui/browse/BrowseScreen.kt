@@ -256,7 +256,7 @@ fun BrowseScreen(vm: BrowseViewModel = viewModel()) {
                     )
                     val photos = (details as? DetailsState.Loaded)?.feature?.properties?.media.orEmpty().filter { it.url.startsWith("/image/") }
                     viewerIndex?.let { index ->
-                        if (index < photos.size) PhotoViewer(photos, index, onDismiss = { viewerIndex = null })
+                        if (index < photos.size) PhotoViewer(photos.asViewerPhotos(), index, onDismiss = { viewerIndex = null })
                     }
                 }
             },

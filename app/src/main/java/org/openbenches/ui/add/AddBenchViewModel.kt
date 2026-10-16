@@ -33,6 +33,11 @@ import java.util.UUID
  */
 data class DraftPhoto(val id: String, val file: File, val mediaType: String, val takenAt: Pair<Double, Double>?)
 
+/** Photos of the bench being added, for the full-screen viewer. */
+fun List<DraftPhoto>.asViewerPhotos(): List<org.openbenches.ui.browse.ViewerPhoto> = map { p ->
+    org.openbenches.ui.browse.ViewerPhoto(p.file, MEDIA_TYPES.firstOrNull { it.first == p.mediaType }?.second ?: "Photo")
+}
+
 /** The website's help page for phones that don't geotag photos. */
 const val GPS_HELP_URL = "https://www.openbenches.org/blog/android-gps-problems/"
 

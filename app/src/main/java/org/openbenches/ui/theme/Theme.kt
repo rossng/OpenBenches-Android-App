@@ -3,7 +3,10 @@ package org.openbenches.ui.theme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
@@ -49,6 +52,14 @@ fun OpenBenchesTheme(content: @Composable () -> Unit) {
         colorScheme = OpenBenchesColors,
         typography = Typography,
         shapes = OpenBenchesShapes,
-        content = content,
-    )
+    ) {
+        // Text handles default to the primary colour, plaque gold, which disappears on the plaque.
+        CompositionLocalProvider(
+            LocalTextSelectionColors provides TextSelectionColors(
+                handleColor = GroundBrown,
+                backgroundColor = SkyBlue.copy(alpha = 0.6f),
+            ),
+            content = content,
+        )
+    }
 }

@@ -33,9 +33,21 @@ import org.openbenches.ui.theme.PlaqueGold
 import org.openbenches.ui.theme.SoftWhite
 import org.openbenches.ui.zoomable
 
-/** Full-screen photos: swipe between them, pinch to zoom, back or ✕ to close. */
+/** A photo for [PhotoViewer]: anything Coil can load (a URL or a local file), and its captions. */
+data class ViewerPhoto(val model: Any, val title: String, val credit: String? = null)
+
+/** Server photos of a bench, captioned with their type, author and licence. */
+fun List<BenchMedia>.asViewerPhotos(): List<ViewerPhoto> = map { m ->
+    ViewerPhoto(
+        model = mediaUrl(m.url),
+        title = mediaTypeLabel(m.mediaType),
+        credit = listOfNotNull(m.username?.let { "by $it" }, m.licence).joinToString(" · ").ifEmpty { null },
+    )
+}
+
+/** Full-screen photos: swipe between them, pinch or double-tap to zoom, back or ✕ to close. */
 @Composable
-fun PhotoViewer(photos: List<BenchMedia>, startIndex: Int, onDismiss: () -> Unit) {
+fun PhotoViewer(photos: List<ViewerPhoto>, startIndex: Int, onDismiss: () -> Unit) {
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
@@ -44,8 +56,8 @@ fun PhotoViewer(photos: List<BenchMedia>, startIndex: Int, onDismiss: () -> Unit
         Box(Modifier.fillMaxSize().background(Color.Black).testTag("photoViewer")) {
             HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
                 SubcomposeAsyncImage(
-                    model = mediaUrl(photos[page].url),
-                    contentDescription = mediaTypeLabel(photos[page].mediaType),
+                    model = photos[page].model,
+                    contentDescription = photos[page].title,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize().zoomable(),
                     loading = {
@@ -53,9 +65,14 @@ fun PhotoViewer(photos: List<BenchMedia>, startIndex: Int, onDismiss: () -> Unit
                             CircularProgressIndicator(color = PlaqueGold)
                         }
                     },
+                    error = {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("This photo isn't available.", style = MaterialTheme.typography.bodyLarge, color = SoftWhite)
+                        }
+                    },
                 )
             }
-            val media = photos[pager.currentPage]
+            val photo = photos[pager.currentPage]
             Row(
                 Modifier.fillMaxWidth().safeDrawingPadding().padding(start = 16.dp, end = 4.dp, top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -72,9 +89,8 @@ fun PhotoViewer(photos: List<BenchMedia>, startIndex: Int, onDismiss: () -> Unit
                 Modifier.align(Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(alpha = 0.55f))
                     .safeDrawingPadding().padding(16.dp),
             ) {
-                Text(mediaTypeLabel(media.mediaType), style = MaterialTheme.typography.titleMedium, color = SoftWhite)
-                val credit = listOfNotNull(media.username?.let { "by $it" }, media.licence).joinToString(" · ")
-                if (credit.isNotEmpty()) Text(credit, style = MaterialTheme.typography.bodySmall, color = SoftWhite.copy(alpha = 0.8f))
+                Text(photo.title, style = MaterialTheme.typography.titleMedium, color = SoftWhite)
+                photo.credit?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = SoftWhite.copy(alpha = 0.8f)) }
             }
         }
     }
